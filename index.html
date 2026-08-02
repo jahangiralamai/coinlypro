@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Ads Rewards</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --primary:#229ED9;
+    --accent:#3EB4F5;
+    --bg:#0F1115;
+    --card:#181C24;
+    --border:rgba(255,255,255,.08);
+    --success:#22C55E;
+    --warning:#F59E0B;
+    --danger:#EF4444;
+    --text-1:#F5F7FA;
+    --text-2:#9AA4B2;
+    --text-3:#5C6572;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+  html,body{
+    height:100%;
+    background:var(--bg);
+    color:var(--text-1);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Inter,Roboto,sans-serif;
+    overflow-x:hidden;
+  }
+
+  body{
+    -webkit-font-smoothing:antialiased;
+    letter-spacing:-0.01em;
+  }
+
+  /* Ambient background glow */
+  #app::before{
+    content:"";
+    position:fixed;
+    top:-120px; left:50%;
+    transform:translateX(-50%);
+    width:480px; height:320px;
+    background:radial-gradient(closest-side, rgba(34,158,217,.25), transparent);
+    filter:blur(20px);
+    pointer-events:none;
+    z-index:0;
+  }
+
+  #app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .page{
+    display:none;
+    padding:calc(18px + var(--safe-top)) 18px calc(96px + var(--safe-bottom));
+    animation:fadeIn .35s ease;
+    position:relative;
+    z-index:1;
+  }
+  .page.active{display:block;}
+
+  @keyframes fadeIn{
+    from{opacity:0; transform:translateY(6px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+
+  h1,h2,h3{font-weight:700; letter-spacing:-0.02em;}
+
+  /* ---------- Header ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:20px;
+  }
+  .user-block{display:flex; align-items:center; gap:12px;}
+  .avatar{
+    width:46px; height:46px; border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--primary));
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:17px; color:#fff;
+    box-shadow:0 4px 14px rgba(34,158,217,.35);
+    position:relative;
+    flex-shrink:0;
+  }
+  .avatar .online-dot{
+    position:absolute; right:-1px; bottom:-1px;
+    width:12px; height:12px; border-radius:50%;
+    background:var(--success); border:2.5px solid var(--bg);
+  }
+  .user-name-row{display:flex; align-items:center; gap:6px;}
+  .user-name{font-size:16px; font-weight:700;}
+  .premium-badge{
+    display:inline-flex; align-items:center; gap:3px;
+    background:linear-gradient(135deg,#FFD97A,#F5A623);
+    color:#3A2400; font-size:10.5px; font-weight:800;
+    padding:2px 7px 2px 5px; border-radius:20px;
+    letter-spacing:.02em;
+  }
+  .user-sub{font-size:12.5px; color:var(--text-2); margin-top:1px;}
+  .icon-btn{
+    width:40px; height:40px; border-radius:13px;
+    background:var(--card); border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-1); cursor:pointer;
+    transition:transform .15s ease, background .15s ease;
+  }
+  .icon-btn:active{transform:scale(.92); background:#1E2330;}
+
+  /* ---------- Balance Card ---------- */
+  .balance-card{
+    position:relative;
+    background:linear-gradient(155deg,#1B2130 0%, #141822 60%, #10141c 100%);
+    border:1px solid var(--border);
+    border-radius:26px;
+    padding:22px 20px 20px;
+    overflow:hidden;
+    margin-bottom:18px;
+    box-shadow:0 20px 40px -20px rgba(0,0,0,.6);
+  }
+  .balance-card::after{
+    content:"";
+    position:absolute; top:-60px; right:-60px;
+    width:200px; height:200px; border-radius:50%;
+    background:radial-gradient(circle, rgba(62,180,245,.25), transparent 70%);
+  }
+  .balance-top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    position:relative; z-index:1;
+  }
+  .balance-label{font-size:12.5px; color:var(--text-2); font-weight:600; letter-spacing:.02em; text-transform:uppercase;}
+  .balance-amount{
+    font-size:38px; font-weight:800; margin-top:6px; letter-spacing:-0.03em;
+    display:flex; align-items:baseline; gap:6px;
+  }
+  .balance-amount .unit{font-size:16px; color:var(--text-2); font-weight:600;}
+  .balance-sub-row{
+    display:flex; gap:18px; margin-top:16px; position:relative; z-index:1;
+  }
+  .balance-stat{flex:1; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:14px; padding:10px 12px;}
+  .balance-stat .stat-label{font-size:11px; color:var(--text-2); font-weight:600;}
+  .balance-stat .stat-value{font-size:15px; font-weight:700; margin-top:3px;}
+  .balance-stat .stat-value.up{color:var(--success);}
+
+  .progress-ring-wrap{
+    position:relative; width:54px; height:54px; flex-shrink:0;
+  }
+  .progress-ring-wrap svg{transform:rotate(-90deg);}
+  .ring-track{fill:none; stroke:rgba(255,255,255,.08); stroke-width:5;}
+  .ring-fill{
+    fill:none; stroke:url(#ringGrad); stroke-width:5; stroke-linecap:round;
+    stroke-dasharray:150.8; stroke-dashoffset:150.8;
+    transition:stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1);
+  }
+  .ring-center{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:800; color:var(--text-1);
+  }
+
+  .claim-btn{
+    margin-top:16px; width:100%; border:none; border-radius:16px;
+    padding:14px; font-size:15px; font-weight:700; color:#fff;
+    background:linear-gradient(135deg,var(--accent),var(--primary));
+    box-shadow:0 10px 24px -8px rgba(34,158,217,.55);
+    cursor:pointer; position:relative; overflow:hidden; z-index:1;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:transform .15s ease;
+  }
+  .claim-btn:active{transform:scale(.97);}
+  .claim-btn:disabled{opacity:.45; box-shadow:none;}
+
+  /* ---------- Section header ---------- */
+  .section-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin:22px 0 12px;
+  }
+  .section-head h2{font-size:17px;}
+  .section-link{font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer;}
+
+  /* ---------- Ad Cards ---------- */
+  .ad-card{
+    display:flex; align-items:center; gap:14px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:20px; padding:14px; margin-bottom:12px;
+    transition:transform .15s ease, border-color .15s ease;
+    position:relative; overflow:hidden;
+  }
+  .ad-card:active{transform:scale(.98);}
+  .ad-logo{
+    width:52px; height:52px; border-radius:15px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(135deg,#1E2A38,#182230);
+    border:1px solid var(--border);
+  }
+  .ad-info{flex:1; min-width:0;}
+  .ad-title-row{display:flex; align-items:center; gap:6px;}
+  .ad-title{font-size:14.5px; font-weight:700;}
+  .ad-cat{
+    font-size:10.5px; color:var(--text-2); background:rgba(255,255,255,.05);
+    padding:2px 7px; border-radius:8px; font-weight:600;
+  }
+  .ad-meta{font-size:12px; color:var(--text-2); margin-top:4px; display:flex; align-items:center; gap:5px;}
+  .ad-reward{font-size:13px; font-weight:700; color:var(--success); margin-top:5px;}
+  .watch-btn{
+    flex-shrink:0; border:none; border-radius:12px; padding:10px 16px;
+    background:rgba(62,180,245,.12); color:var(--accent); font-weight:700; font-size:13px;
+    cursor:pointer; transition:background .15s ease, transform .15s ease;
+  }
+  .watch-btn:active{transform:scale(.93);}
+  .watch-btn.watched{background:rgba(34,197,94,.12); color:var(--success);}
+
+  /* ---------- Missions ---------- */
+  .mission-card{
+    display:flex; align-items:center; gap:13px;
+    background:var(--card); border:1px solid var(--border);
+    border-radius:18px; padding:14px; margin-bottom:10px;
+  }
+  .mission-icon{
+    width:42px; height:42px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(62,180,245,.1); color:var(--accent);
+  }
+  .mission-body{flex:1; min-width:0;}
+  .mission-title-row{display:flex; justify-content:space-between; align-items:center;}
+  .mission-title{font-size:13.5px; font-weight:700;}
+  .mission-reward{font-size:12px; font-weight:700; color:var(--warning);}
+  .mission-bar-track{
+    height:6px; border-radius:6px; background:rgba(255,255,255,.06);
+    margin-top:8px; overflow:hidden;
+  }
+  .mission-bar-fill{
+    height:100%; border-radius:6px;
+    background:linear-gradient(90deg,var(--primary),var(--accent));
+    transition:width 1s cubic-bezier(.22,1,.36,1);
+  }
+  .mission-progress-text{font-size:11px; color:var(--text-2); margin-top:5px;}
+  .mission-claim{
+    flex-shrink:0; width:34px; height:34px; border-radius:10px; border:none;
+    background:rgba(34,197,94,.12); color:var(--success); display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+
+  /* ---------- Referral Banner ---------- */
+  .referral-banner{
+    position:relative; overflow:hidden;
+    margin-top:22px; border-radius:22px; padding:20px;
+    background:linear-gradient(135deg,#16324a,#0f1e2e 60%);
+    border:1px solid rgba(62,180,245,.25);
+  }
+  .referral-banner .float-shape{
+    position:absolute; width:120px; height:120px; border-radius:50%;
+    background:radial-gradient(circle, rgba(62,180,245,.35), transparent 70%);
+    top:-40px; right:-30px;
+    animation:float 5s ease-in-out infinite;
+  }
+  @keyframes float{
+    0%,100%{transform:translateY(0);}
+    50%{transform:translateY(10px);}
+  }
+  .referral-banner h3{font-size:17px; margin-bottom:4px; position:relative; z-index:1;}
+  .referral-banner p{font-size:12.5px; color:var(--text-2); margin-bottom:14px; position:relative; z-index:1; max-width:80%;}
+  .referral-pct{
+    color:var(--accent); font-weight:800;
+  }
+  .referral-actions{display:flex; gap:10px; position:relative; z-index:1;}
+  .ref-btn{
+    flex:1; border:none; border-radius:13px; padding:11px; font-size:13px; font-weight:700;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .ref-btn.primary{background:var(--accent); color:#08202e;}
+  .ref-btn.ghost{background:rgba(255,255,255,.06); color:var(--text-1); border:1px solid var(--border);}
+
+  /* ---------- Bottom nav ---------- */
+  .bottom-nav{
+    position:fixed; left:0; right:0; bottom:0;
+    max-width:480px; margin:0 auto;
+    background:rgba(15,17,21,.85);
+    backdrop-filter:blur(20px) saturate(160%);
+    -webkit-backdrop-filter:blur(20px) saturate(160%);
+    border-top:1px solid var(--border);
+    display:flex; padding:8px 6px calc(8px + var(--safe-bottom));
+    z-index:50;
+  }
+  .nav-item{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:6px 0; color:var(--text-3); cursor:pointer; position:relative;
+    transition:color .2s ease;
+  }
+  .nav-item svg{width:23px; height:23px; transition:transform .2s ease;}
+  .nav-item span{font-size:10.5px; font-weight:600;}
+  .nav-item.active{color:var(--accent);}
+  .nav-item.active svg{transform:translateY(-2px);}
+  .nav-item.active::before{
+    content:""; position:absolute; top:-8px; width:4px; height:4px; border-radius:50%;
+    background:var(--accent);
+  }
+
+  /* ---------- Shimmer / loading ---------- */
+  .shimmer{
+    background:linear-gradient(90deg, rgba(255,255,255,.03) 25%, rgba(255,255,255,.08) 37%, rgba(255,255,255,.03) 63%);
+    background-size:400% 100%;
+    animation:shimmer 1.4s ease infinite;
+  }
+  @keyframes shimmer{
+    0%{background-position:100% 50%;}
+    100%{background-position:0 50%;}
+  }
+
+  /* ---------- Ripple ---------- */
+  .ripple{
+    position:absolute; border-radius:50%; transform:scale(0);
+    background:rgba(255,255,255,.35); animation:rippleAnim .55s ease-out;
+    pointer-events:none;
+  }
+  @keyframes rippleAnim{ to{transform:scale(3); opacity:0;} }
+
+  /* ---------- Rewards Page ---------- */
+  .value-card{
+    background:var(--card); border:1px solid var(--border); border-radius:22px;
+    padding:20px; display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;
+  }
+  .value-block .v-label{font-size:12px; color:var(--text-2); font-weight:600;}
+  .value-block .v-amount{font-size:24px; font-weight:800; margin-top:4px;}
+  .value-divider{width:1px; align-self:stretch; background:var(--border);}
+
+  .redeem-grid{display:flex; flex-direction:column; gap:12px;}
+  .redeem-card{
+    display:flex; align-items:center; gap:14px;
+    background:var(--card); border:1px solid var(--border); border-radius:18px; padding:14px 16px;
+    cursor:pointer; transition:transform .15s ease, border-color .15s ease;
+  }
+  .redeem-card:active{transform:scale(.98); border-color:rgba(62,180,245,.4);}
+  .redeem-logo{
+    width:46px; height:46px; border-radius:13px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; color:#fff;
+  }
+  .redeem-name{font-size:14.5px; font-weight:700;}
+  .redeem-sub{font-size:12px; color:var(--text-2); margin-top:2px;}
+  .redeem-chevron{margin-left:auto; color:var(--text-3);}
+
+  /* ---------- History Page ---------- */
+  .timeline{position:relative; padding-left:6px;}
+  .timeline-item{
+    display:flex; gap:14px; position:relative; padding-bottom:22px;
+  }
+  .timeline-item::before{
+    content:""; position:absolute; left:19px; top:40px; bottom:0; width:1.5px;
+    background:var(--border);
+  }
+  .timeline-item:last-child::before{display:none;}
+  .tl-icon{
+    width:40px; height:40px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--card); border:1px solid var(--border); z-index:1;
+  }
+  .tl-body{flex:1; background:var(--card); border:1px solid var(--border); border-radius:16px; padding:12px 14px;}
+  .tl-top{display:flex; justify-content:space-between; align-items:center;}
+  .tl-title{font-size:13.5px; font-weight:700;}
+  .tl-amount{font-size:13.5px; font-weight:800;}
+  .tl-amount.pos{color:var(--success);}
+  .tl-amount.neg{color:var(--danger);}
+  .tl-meta{display:flex; justify-content:space-between; margin-top:5px;}
+  .tl-date{font-size:11.5px; color:var(--text-2);}
+  .tl-status{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:8px;}
+  .tl-status.success{background:rgba(34,197,94,.12); color:var(--success);}
+  .tl-status.pending{background:rgba(245,158,11,.12); color:var(--warning);}
+  .tl-status.failed{background:rgba(239,68,68,.12); color:var(--danger);}
+
+  .filter-row{display:flex; gap:8px; margin-bottom:18px; overflow-x:auto; padding-bottom:2px;}
+  .filter-chip{
+    flex-shrink:0; padding:8px 14px; border-radius:20px; font-size:12.5px; font-weight:600;
+    background:var(--card); border:1px solid var(--border); color:var(--text-2); cursor:pointer;
+  }
+  .filter-chip.active{background:var(--accent); color:#08202e; border-color:var(--accent);}
+
+  /* ---------- Profile Page ---------- */
+  .profile-hero{
+    text-align:center; padding:10px 0 22px; position:relative;
+  }
+  .profile-avatar-lg{
+    width:84px; height:84px; border-radius:50%; margin:0 auto 12px;
+    background:linear-gradient(135deg,var(--accent),var(--primary));
+    display:flex; align-items:center; justify-content:center;
+    font-size:30px; font-weight:800; color:#fff;
+    box-shadow:0 12px 30px -8px rgba(34,158,217,.5);
+    border:3px solid var(--bg);
+  }
+  .profile-name{font-size:19px; font-weight:800;}
+  .profile-username{font-size:13px; color:var(--text-2); margin-top:2px;}
+  .level-chip{
+    display:inline-flex; align-items:center; gap:5px; margin-top:10px;
+    background:rgba(245,158,11,.12); color:var(--warning); font-size:12px; font-weight:700;
+    padding:5px 12px; border-radius:20px;
+  }
+
+  .stats-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:22px;}
+  .stat-tile{
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:12px 6px; text-align:center;
+  }
+  .stat-tile .num{font-size:16px; font-weight:800;}
+  .stat-tile .lbl{font-size:9.5px; color:var(--text-2); font-weight:600; margin-top:3px; text-transform:uppercase; letter-spacing:.02em;}
+
+  .ref-code-card{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--card); border:1px dashed rgba(62,180,245,.35); border-radius:16px;
+    padding:14px 16px; margin-bottom:22px;
+  }
+  .ref-code{font-size:15px; font-weight:800; letter-spacing:.06em; color:var(--accent);}
+  .ref-code-label{font-size:11px; color:var(--text-2); font-weight:600;}
+  .copy-btn{
+    border:none; border-radius:10px; padding:8px 12px; background:rgba(62,180,245,.12);
+    color:var(--accent); font-size:12px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px;
+  }
+
+  .achv-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; margin-bottom:22px;}
+  .achv-badge{
+    flex-shrink:0; width:74px; text-align:center;
+  }
+  .achv-icon{
+    width:58px; height:58px; border-radius:18px; margin:0 auto 6px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--card); border:1px solid var(--border);
+  }
+  .achv-icon.locked{opacity:.35;}
+  .achv-label{font-size:10px; color:var(--text-2); font-weight:600;}
+
+  .settings-list{background:var(--card); border:1px solid var(--border); border-radius:18px; overflow:hidden;}
+  .settings-row{
+    display:flex; align-items:center; gap:12px; padding:14px 16px;
+    border-bottom:1px solid var(--border); cursor:pointer;
+  }
+  .settings-row:last-child{border-bottom:none;}
+  .settings-row .s-icon{color:var(--text-2); flex-shrink:0;}
+  .settings-row .s-label{flex:1; font-size:14px; font-weight:600;}
+  .settings-row .s-value{font-size:12.5px; color:var(--text-2);}
+  .settings-row .chev{color:var(--text-3);}
+
+  .toggle{
+    width:46px; height:27px; border-radius:20px; background:rgba(255,255,255,.1);
+    position:relative; cursor:pointer; flex-shrink:0; transition:background .2s ease;
+  }
+  .toggle.on{background:var(--primary);}
+  .toggle::after{
+    content:""; position:absolute; top:2.5px; left:3px; width:22px; height:22px; border-radius:50%;
+    background:#fff; transition:transform .2s ease; box-shadow:0 2px 4px rgba(0,0,0,.3);
+  }
+  .toggle.on::after{transform:translateX(19px);}
+
+  /* ---------- Modals ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.6);
+    backdrop-filter:blur(4px);
+    display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .25s ease;
+    z-index:100;
+  }
+  .modal-overlay.show{opacity:1; pointer-events:auto;}
+  .modal-sheet{
+    width:100%; max-width:480px; background:var(--card);
+    border:1px solid var(--border); border-bottom:none;
+    border-radius:26px 26px 0 0; padding:10px 22px calc(28px + var(--safe-bottom));
+    transform:translateY(100%); transition:transform .35s cubic-bezier(.22,1,.36,1);
+  }
+  .modal-overlay.show .modal-sheet{transform:translateY(0);}
+  .modal-handle{width:38px; height:4px; border-radius:4px; background:var(--border); margin:6px auto 16px;}
+
+  .modal-overlay.center{align-items:center; padding:20px;}
+  .modal-sheet.centered{
+    border-radius:26px; text-align:center; transform:scale(.85); opacity:0;
+    transition:transform .35s cubic-bezier(.22,1,.36,1), opacity .3s ease;
+  }
+  .modal-overlay.center.show .modal-sheet.centered{transform:scale(1); opacity:1;}
+
+  .bonus-icon-wrap{
+    width:88px; height:88px; border-radius:50%; margin:8px auto 16px;
+    background:radial-gradient(circle, rgba(245,158,11,.25), transparent 70%);
+    display:flex; align-items:center; justify-content:center; position:relative;
+  }
+  .bonus-amount{font-size:30px; font-weight:800; color:var(--warning); margin-bottom:4px;}
+  .bonus-sub{font-size:13px; color:var(--text-2); margin-bottom:22px;}
+
+  .form-group{margin-bottom:16px;}
+  .form-label{font-size:12.5px; font-weight:600; color:var(--text-2); margin-bottom:8px; display:block;}
+  .method-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+  .method-pick{
+    border:1px solid var(--border); border-radius:14px; padding:10px 4px; text-align:center; cursor:pointer;
+    background:rgba(255,255,255,.02);
+  }
+  .method-pick.selected{border-color:var(--accent); background:rgba(62,180,245,.08);}
+  .method-pick .m-logo{width:30px; height:30px; border-radius:9px; margin:0 auto 6px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:800; color:#fff;}
+  .method-pick .m-name{font-size:10px; font-weight:700;}
+
+  .amount-input{
+    width:100%; background:rgba(255,255,255,.03); border:1px solid var(--border); border-radius:14px;
+    padding:14px 16px; font-size:20px; font-weight:800; color:var(--text-1);
+  }
+  .amount-input:focus{outline:none; border-color:var(--accent);}
+  .amount-hint{font-size:11.5px; color:var(--text-2); margin-top:6px;}
+
+  .modal-actions{display:flex; gap:10px; margin-top:20px;}
+  .m-btn{flex:1; border:none; border-radius:14px; padding:14px; font-weight:700; font-size:14.5px; cursor:pointer;}
+  .m-btn.confirm{background:linear-gradient(135deg,var(--accent),var(--primary)); color:#fff;}
+  .m-btn.cancel{background:rgba(255,255,255,.06); color:var(--text-2); border:1px solid var(--border);}
+
+  /* Confetti */
+  #confettiCanvas{position:fixed; inset:0; pointer-events:none; z-index:110;}
+
+  /* Toast */
+  .toast{
+    position:fixed; top:calc(14px + var(--safe-top)); left:50%; transform:translateX(-50%) translateY(-40px);
+    background:#1E2330; border:1px solid var(--border); border-radius:14px;
+    padding:12px 18px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;
+    z-index:200; opacity:0; transition:all .3s cubic-bezier(.22,1,.36,1); max-width:90%;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0); opacity:1;}
+
+  /* Ad watching overlay */
+  .watching-overlay{
+    position:fixed; inset:0; background:#000; z-index:150;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .3s ease;
+  }
+  .watching-overlay.show{opacity:1; pointer-events:auto;}
+  .watching-ring{
+    width:80px; height:80px; border-radius:50%;
+    border:3px solid rgba(255,255,255,.1); border-top-color:var(--accent);
+    animation:spin 1s linear infinite; margin-bottom:20px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .watching-text{color:var(--text-2); font-size:13px; font-weight:600;}
+  .watching-timer{color:#fff; font-size:34px; font-weight:800; margin-top:8px; font-variant-numeric:tabular-nums;}
+
+  ::selection{background:rgba(62,180,245,.3);}
+  .hidden-scrollbar::-webkit-scrollbar{display:none;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================= HOME PAGE ================= -->
+  <section class="page active" id="page-home">
+    <div class="topbar">
+      <div class="user-block">
+        <div class="avatar">JA<span class="online-dot"></span></div>
+        <div>
+          <div class="user-name-row">
+            <span class="user-name">Jahangir</span>
+            <span class="premium-badge">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.4 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+              Premium
+            </span>
+          </div>
+          <div class="user-sub">@jahangir_dev</div>
+        </div>
+      </div>
+      <div class="icon-btn" onclick="showToast('No new notifications')">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+      </div>
+    </div>
+
+    <div class="balance-card">
+      <div class="balance-top">
+        <div>
+          <div class="balance-label">Available Balance</div>
+          <div class="balance-amount"><span id="balanceNum">2,480</span><span class="unit">coins</span></div>
+        </div>
+        <div class="progress-ring-wrap">
+          <svg width="54" height="54" viewBox="0 0 54 54">
+            <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#3EB4F5"/>
+                <stop offset="100%" stop-color="#229ED9"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-track" cx="27" cy="27" r="24"/>
+            <circle class="ring-fill" id="dailyRing" cx="27" cy="27" r="24"/>
+          </svg>
+          <div class="ring-center">65%</div>
+        </div>
+      </div>
+
+      <div class="balance-sub-row">
+        <div class="balance-stat">
+          <div class="stat-label">Today</div>
+          <div class="stat-value up" id="todayEarn">+180</div>
+        </div>
+        <div class="balance-stat">
+          <div class="stat-label">Lifetime</div>
+          <div class="stat-value" id="lifetimeEarn">18,940</div>
+        </div>
+        <div class="balance-stat">
+          <div class="stat-label">Daily Goal</div>
+          <div class="stat-value">260 / 400</div>
+        </div>
+      </div>
+
+      <button class="claim-btn" id="claimBtn" onclick="claimDailyReward(event)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7S9 2 6 2 3 5 6 7h6z"/><path d="M12 7s3-5 6-5 3 3 0 5h-6z"/></svg>
+        Claim Daily Reward
+      </button>
+    </div>
+
+    <div class="section-head">
+      <h2>Available Ads</h2>
+      <span class="section-link" onclick="switchPage('rewards')">View all</span>
+    </div>
+
+    <div id="adList"></div>
+
+    <div class="section-head">
+      <h2>Missions</h2>
+      <span class="section-link">3 active</span>
+    </div>
+
+    <div id="missionList"></div>
+
+    <div class="referral-banner">
+      <div class="float-shape"></div>
+      <h3>Invite friends, earn more</h3>
+      <p>Get <span class="referral-pct">20%</span> of every reward your friends earn — forever.</p>
+      <div class="referral-actions">
+        <button class="ref-btn primary" onclick="copyReferral(event)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copy Link
+        </button>
+        <button class="ref-btn ghost" onclick="showToast('Share sheet opened')">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 3.9M15.4 6.5L8.6 10.4"/></svg>
+          Share
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= REWARDS PAGE ================= -->
+  <section class="page" id="page-rewards">
+    <div class="topbar">
+      <h1 style="font-size:21px;">Rewards</h1>
+      <div class="icon-btn" onclick="switchPage('history')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 106.16-8.9"/><path d="M12 7v5l4 2"/></svg>
+      </div>
+    </div>
+
+    <div class="value-card">
+      <div class="value-block">
+        <div class="v-label">Coin Balance</div>
+        <div class="v-amount">2,480</div>
+      </div>
+      <div class="value-divider"></div>
+      <div class="value-block">
+        <div class="v-label">Cash Value</div>
+        <div class="v-amount">৳248.00</div>
+      </div>
+    </div>
+
+    <div class="section-head" style="margin-top:0;">
+      <h2>Redeem Via</h2>
+    </div>
+
+    <div class="redeem-grid" id="redeemList"></div>
+
+    <div class="section-head">
+      <h2>All Available Ads</h2>
+    </div>
+    <div id="adListFull"></div>
+  </section>
+
+  <!-- ================= HISTORY PAGE ================= -->
+  <section class="page" id="page-history">
+    <div class="topbar">
+      <h1 style="font-size:21px;">History</h1>
+    </div>
+
+    <div class="filter-row hidden-scrollbar">
+      <div class="filter-chip active" data-filter="all" onclick="filterHistory(this,'all')">All</div>
+      <div class="filter-chip" data-filter="reward" onclick="filterHistory(this,'reward')">Rewards</div>
+      <div class="filter-chip" data-filter="ad" onclick="filterHistory(this,'ad')">Ads Watched</div>
+      <div class="filter-chip" data-filter="withdraw" onclick="filterHistory(this,'withdraw')">Withdrawals</div>
+      <div class="filter-chip" data-filter="referral" onclick="filterHistory(this,'referral')">Referral</div>
+    </div>
+
+    <div class="timeline" id="historyList"></div>
+  </section>
+
+  <!-- ================= PROFILE PAGE ================= -->
+  <section class="page" id="page-profile">
+    <div class="topbar">
+      <h1 style="font-size:21px;">Profile</h1>
+      <div class="icon-btn" onclick="showToast('Opening help center')">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+      </div>
+    </div>
+
+    <div class="profile-hero">
+      <div class="profile-avatar-lg">JA</div>
+      <div class="profile-name">Md Jahangir Alam</div>
+      <div class="profile-username">@jahangir_dev · Joined Jun 2026</div>
+      <div class="level-chip">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2L12 16.4 5.7 21l2.3-7.2-6-4.6h7.6z"/></svg>
+        Level 7 · Gold Earner
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-tile"><div class="num">342</div><div class="lbl">Ads Watched</div></div>
+      <div class="stat-tile"><div class="num">18.9k</div><div class="lbl">Earnings</div></div>
+      <div class="stat-tile"><div class="num">27</div><div class="lbl">Referrals</div></div>
+      <div class="stat-tile"><div class="num">7</div><div class="lbl">Level</div></div>
+    </div>
+
+    <div class="ref-code-card">
+      <div>
+        <div class="ref-code-label">Your Referral Code</div>
+        <div class="ref-code">JAHAN2026</div>
+      </div>
+      <button class="copy-btn" onclick="copyReferral(event)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Copy
+      </button>
+    </div>
+
+    <div class="section-head" style="margin-top:0;">
+      <h2>Achievements</h2>
+    </div>
+    <div class="achv-row hidden-scrollbar" id="achvList"></div>
+
+    <div class="section-head">
+      <h2>Settings</h2>
+    </div>
+    <div class="settings-list" id="settingsList"></div>
+  </section>
+
+  <!-- ================= BOTTOM NAV ================= -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" data-page="home" onclick="switchPage('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1z"/></svg>
+      <span>Home</span>
+    </div>
+    <div class="nav-item" data-page="rewards" onclick="switchPage('rewards')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18"/><path d="M12 8v13"/><path d="M12 8c-1.5-3-5-4-6-2s1 2.5 6 2z"/><path d="M12 8c1.5-3 5-4 6-2s-1 2.5-6 2z"/></svg>
+      <span>Rewards</span>
+    </div>
+    <div class="nav-item" data-page="history" onclick="switchPage('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 106.16-8.9"/><path d="M12 7v5l4 2"/></svg>
+      <span>History</span>
+    </div>
+    <div class="nav-item" data-page="profile" onclick="switchPage('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+      <span>Profile</span>
+    </div>
+  </nav>
+</div>
+
+<!-- ================= WATCHING OVERLAY ================= -->
+<div class="watching-overlay" id="watchingOverlay">
+  <div class="watching-ring"></div>
+  <div class="watching-text">Ad playing — please wait</div>
+  <div class="watching-timer" id="watchTimer">5</div>
+</div>
+
+<!-- ================= BONUS POPUP ================= -->
+<div class="modal-overlay center" id="bonusModal">
+  <div class="modal-sheet centered">
+    <div class="bonus-icon-wrap">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7S9 2 6 2 3 5 6 7h6z"/><path d="M12 7s3-5 6-5 3 3 0 5h-6z"/></svg>
+    </div>
+    <h2 style="font-size:20px; margin-bottom:6px;">Congratulations 🎉</h2>
+    <div class="bonus-sub">You just earned</div>
+    <div class="bonus-amount" id="bonusAmount">+25 Coins</div>
+    <button class="claim-btn" style="margin-top:0;" onclick="closeModal('bonusModal')">Claim & Continue</button>
+  </div>
+</div>
+
+<!-- ================= WITHDRAW POPUP ================= -->
+<div class="modal-overlay" id="withdrawModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h2 style="font-size:18px; margin-bottom:18px;">Withdraw Funds</h2>
+
+    <div class="form-group">
+      <label class="form-label">Select Method</label>
+      <div class="method-grid" id="withdrawMethods"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Amount (Coins)</label>
+      <input type="number" class="amount-input" id="withdrawAmount" placeholder="0" value="500">
+      <div class="amount-hint">≈ ৳50.00 · Balance: 2,480 coins · Min withdraw 100</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="m-btn cancel" onclick="closeModal('withdrawModal')">Cancel</button>
+      <button class="m-btn confirm" onclick="confirmWithdraw(event)">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="confettiCanvas"></canvas>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ TELEGRAM WEBAPP SDK ============ */
+if(typeof Telegram !== 'undefined' && Telegram.WebApp){
+  const tg = Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+  
+  // Get real Telegram user data
+  const user = tg.initDataUnsafe?.user;
+  if(user){
+    // Update avatar with user initials
+    const initials = (user.first_name?.[0] || 'U') + (user.last_name?.[0] || 'S');
+    const avatarEl = document.querySelector('.avatar');
+    if(avatarEl) avatarEl.textContent = initials.toUpperCase();
+    
+    // Update user name
+    const nameEl = document.querySelector('.user-name');
+    if(nameEl && user.first_name) nameEl.textContent = user.first_name;
+    
+    // Update user handle
+    const subEl = document.querySelector('.user-sub');
+    if(subEl && user.username) subEl.textContent = '@' + user.username;
+  }
+}
+
+/* ============ ICON HELPERS ============ */
+
+const icon = {
+  film:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3EB4F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 8h5M2 16h5M17 8h5M17 16h5"/></svg>`,
+  bolt:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3EB4F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>`,
+  gift:`<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3EB4F5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18M12 8v13M12 8c-1.5-3-5-4-6-2s1 2.5 6 2zM12 8c1.5-3 5-4 6-2s-1 2.5-6 2z"/></svg>`,
+  calendar:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+  play:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M10 8l6 4-6 4V8z" fill="currentColor" stroke="none"/></svg>`,
+  users:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>`,
+  user:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>`,
+  channel:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>`,
+  check:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+  chevron:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`,
+  arrowDown:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>`,
+  arrowUp:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`,
+  reward:`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M8.2 13.5L6 22l6-3 6 3-2.2-8.5"/></svg>`,
+  globe:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z"/></svg>`,
+  moon:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>`,
+  bell:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>`,
+  help:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>`,
+  shield:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  doc:`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`,
+  trophy:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/><path d="M7 5H4a3 3 0 003 3M17 5h3a3 3 0 01-3 3"/></svg>`,
+  fire:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2s5 5 5 10a5 5 0 01-10 0c0-1.5.8-2.5 1.5-3.5C9.5 10 9 12 10 13c0-3 2-4 2-7 1 1 3 2 3 5.5"/></svg>`,
+  target:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#3EB4F5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="#3EB4F5" stroke="none"/></svg>`,
+  diamond:`<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#9AA4B2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 12L2 9z"/></svg>`,
+};
+
+/* ============ DATA ============ */
+const ads = [
+  {logo:'📺', title:'Sponsored: NovaTech', reward:10, time:'15s', cat:'Tech'},
+  {logo:'🎮', title:'Sponsored: PixelWars', reward:25, time:'30s', cat:'Gaming'},
+  {logo:'🛒', title:'Sponsored: ShopHub', reward:50, time:'45s', cat:'Retail'},
+  {logo:'✈️', title:'Sponsored: FlyEasy', reward:15, time:'20s', cat:'Travel'},
+];
+
+const missions = [
+  {icon:icon.calendar, title:'Daily Login', reward:5, progress:100, total:1, done:1, claimed:false},
+  {icon:icon.play, title:'Watch 5 Ads', reward:30, progress:60, total:5, done:3},
+  {icon:icon.users, title:'Invite Friends', reward:100, progress:20, total:5, done:1},
+  {icon:icon.user, title:'Complete Profile', reward:20, progress:80, total:5, done:4},
+  {icon:icon.channel, title:'Join Telegram Channel', reward:15, progress:0, total:1, done:0},
+];
+
+const redeemMethods = [
+  {name:'bKash', sub:'Instant · Min ৳50', color:'#E2136E', tag:'bK'},
+  {name:'Nagad', sub:'Instant · Min ৳50', color:'#F6921E', tag:'N'},
+  {name:'Rocket', sub:'1–2 hrs · Min ৳100', color:'#8C3494', tag:'R'},
+  {name:'Binance USDT', sub:'Network fee applies', color:'#F0B90B', tag:'₮'},
+  {name:'Perfect Money', sub:'24 hr review', color:'#1B6FC9', tag:'PM'},
+];
+
+const history = [
+  {type:'reward', icon:icon.reward, title:'Daily Reward Claimed', amount:'+40', date:'Today, 9:12 AM', status:'success'},
+  {type:'ad', icon:icon.play, title:'Ad Watched — NovaTech', amount:'+10', date:'Today, 8:55 AM', status:'success'},
+  {type:'withdraw', icon:icon.arrowUp, title:'Withdrawal — bKash', amount:'-500', date:'Yesterday, 6:30 PM', status:'pending'},
+  {type:'referral', icon:icon.users, title:'Referral Bonus — @rafiq', amount:'+60', date:'Yesterday, 2:10 PM', status:'success'},
+  {type:'ad', icon:icon.play, title:'Ad Watched — ShopHub', amount:'+50', date:'Jul 31, 4:02 PM', status:'success'},
+  {type:'withdraw', icon:icon.arrowUp, title:'Withdrawal — Nagad', amount:'-1200', date:'Jul 30, 11:00 AM', status:'failed'},
+  {type:'reward', icon:icon.reward, title:'Mission Reward — Profile', amount:'+20', date:'Jul 29, 9:40 AM', status:'success'},
+];
+
+const achievements = [
+  {icon:icon.trophy, label:'Top Earner', locked:false},
+  {icon:icon.fire, label:'7 Day Streak', locked:false},
+  {icon:icon.target, label:'100 Ads', locked:false},
+  {icon:icon.diamond, label:'50 Referrals', locked:true},
+];
+
+const settings = [
+  {icon:icon.globe, label:'Language', value:'English'},
+  {icon:icon.moon, label:'Dark Mode', toggle:true, on:true},
+  {icon:icon.bell, label:'Notifications', toggle:true, on:true},
+  {icon:icon.help, label:'Help Center'},
+  {icon:icon.shield, label:'Privacy Policy'},
+  {icon:icon.doc, label:'Terms of Service'},
+];
+
+/* ============ RENDER ============ */
+function renderAds(containerId){
+  const el = document.getElementById(containerId);
+  el.innerHTML = ads.map((a,i)=>`
+    <div class="ad-card">
+      <div class="ad-logo" style="font-size:24px;">${a.logo}</div>
+      <div class="ad-info">
+        <div class="ad-title-row">
+          <span class="ad-title">${a.title}</span>
+          <span class="ad-cat">${a.cat}</span>
+        </div>
+        <div class="ad-meta">${icon.play.replace('width="20" height="20"','width="12" height="12"')} ~${a.time} watch time</div>
+        <div class="ad-reward">+${a.reward} Coins</div>
+      </div>
+      <button class="watch-btn" id="watch-${containerId}-${i}" onclick="watchAd(event,'${containerId}',${i},${a.reward})">Watch</button>
+    </div>
+  `).join('');
+}
+renderAds('adList');
+renderAds('adListFull');
+
+function renderMissions(){
+  document.getElementById('missionList').innerHTML = missions.map((m,i)=>`
+    <div class="mission-card">
+      <div class="mission-icon">${m.icon}</div>
+      <div class="mission-body">
+        <div class="mission-title-row">
+          <span class="mission-title">${m.title}</span>
+          <span class="mission-reward">+${m.reward}</span>
+        </div>
+        <div class="mission-bar-track"><div class="mission-bar-fill" style="width:${m.progress}%"></div></div>
+        <div class="mission-progress-text">${m.done}/${m.total} completed</div>
+      </div>
+      ${m.progress>=100 ? `<button class="mission-claim" onclick="claimMission(event,${i})">${icon.check}</button>` : ''}
+    </div>
+  `).join('');
+}
+renderMissions();
+
+function renderRedeem(){
+  document.getElementById('redeemList').innerHTML = redeemMethods.map(r=>`
+    <div class="redeem-card" onclick="openWithdraw()">
+      <div class="redeem-logo" style="background:${r.color};">${r.tag}</div>
+      <div>
+        <div class="redeem-name">${r.name}</div>
+        <div class="redeem-sub">${r.sub}</div>
+      </div>
+      <div class="redeem-chevron">${icon.chevron}</div>
+    </div>
+  `).join('');
+}
+renderRedeem();
+
+function renderHistory(filter='all'){
+  const list = filter==='all' ? history : history.filter(h=>h.type===filter);
+  document.getElementById('historyList').innerHTML = list.map(h=>`
+    <div class="timeline-item">
+      <div class="tl-icon">${h.icon}</div>
+      <div class="tl-body">
+        <div class="tl-top">
+          <span class="tl-title">${h.title}</span>
+          <span class="tl-amount ${h.amount.startsWith('+')?'pos':'neg'}">${h.amount}</span>
+        </div>
+        <div class="tl-meta">
+          <span class="tl-date">${h.date}</span>
+          <span class="tl-status ${h.status}">${h.status[0].toUpperCase()+h.status.slice(1)}</span>
+        </div>
+      </div>
+    </div>
+  `).join('') || `<div style="text-align:center; color:var(--text-2); padding:40px 0; font-size:13px;">No transactions in this category</div>`;
+}
+renderHistory();
+
+function filterHistory(el,type){
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderHistory(type);
+}
+
+function renderAchievements(){
+  document.getElementById('achvList').innerHTML = achievements.map(a=>`
+    <div class="achv-badge">
+      <div class="achv-icon ${a.locked?'locked':''}">${a.icon}</div>
+      <div class="achv-label">${a.label}</div>
+    </div>
+  `).join('');
+}
+renderAchievements();
+
+function renderSettings(){
+  document.getElementById('settingsList').innerHTML = settings.map((s,i)=>`
+    <div class="settings-row" onclick="${s.toggle ? `toggleSetting(event,${i})` : `showToast('${s.label} opened')`}">
+      <span class="s-icon">${s.icon}</span>
+      <span class="s-label">${s.label}</span>
+      ${s.toggle ? `<div class="toggle ${s.on?'on':''}" id="toggle-${i}"></div>` : (s.value ? `<span class="s-value">${s.value}</span><span class="chev">${icon.chevron}</span>` : `<span class="chev">${icon.chevron}</span>`)}
+    </div>
+  `).join('');
+}
+renderSettings();
+
+function toggleSetting(e,i){
+  e.stopPropagation();
+  settings[i].on = !settings[i].on;
+  document.getElementById(`toggle-${i}`).classList.toggle('on', settings[i].on);
+}
+
+const methodColors = redeemMethods;
+document.getElementById('withdrawMethods').innerHTML = methodColors.map((m,i)=>`
+  <div class="method-pick ${i===0?'selected':''}" onclick="selectMethod(event,this)">
+    <div class="m-logo" style="background:${m.color};">${m.tag}</div>
+    <div class="m-name">${m.name.split(' ')[0]}</div>
+  </div>
+`).join('');
+
+function selectMethod(e,el){
+  document.querySelectorAll('.method-pick').forEach(m=>m.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+/* ============ NAVIGATION ============ */
+function switchPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===page));
+  document.getElementById('app').scrollIntoView({behavior:'instant'});
+  window.scrollTo(0,0);
+}
+
+/* ============ RIPPLE ============ */
+document.addEventListener('click', function(e){
+  const target = e.target.closest('.claim-btn, .watch-btn, .ref-btn, .icon-btn, .nav-item, .redeem-card, .m-btn');
+  if(!target) return;
+  const rect = target.getBoundingClientRect();
+  const ripple = document.createElement('span');
+  const size = Math.max(rect.width, rect.height);
+  ripple.className='ripple';
+  ripple.style.width = ripple.style.height = size+'px';
+  ripple.style.left = (e.clientX-rect.left-size/2)+'px';
+  ripple.style.top = (e.clientY-rect.top-size/2)+'px';
+  target.style.position = target.style.position || 'relative';
+  target.style.overflow='hidden';
+  target.appendChild(ripple);
+  setTimeout(()=>ripple.remove(),600);
+});
+
+/* ============ DAILY RING ANIM ============ */
+window.addEventListener('load', ()=>{
+  const ring = document.getElementById('dailyRing');
+  const circumference = 150.8;
+  const pct = 0.65;
+  requestAnimationFrame(()=>{
+    ring.style.strokeDashoffset = circumference - (circumference*pct);
+  });
+});
+
+/* ============ WATCH AD FLOW ============ */
+let watchingBusy = false;
+function watchAd(e, containerId, index, reward){
+  e.stopPropagation();
+  if(watchingBusy) return;
+  watchingBusy = true;
+  const overlay = document.getElementById('watchingOverlay');
+  const timerEl = document.getElementById('watchTimer');
+  let t = 5;
+  timerEl.textContent = t;
+  overlay.classList.add('show');
+  const interval = setInterval(()=>{
+    t--;
+    timerEl.textContent = t;
+    if(t<=0){
+      clearInterval(interval);
+      overlay.classList.remove('show');
+      watchingBusy = false;
+      markWatched(containerId, index);
+      triggerBonus(reward);
+    }
+  },1000);
+}
+
+function markWatched(containerId, index){
+  ['adList','adListFull'].forEach(cid=>{
+    const btn = document.getElementById(`watch-${cid}-${index}`);
+    if(btn){ btn.textContent='Watched'; btn.classList.add('watched'); btn.disabled=true; }
+  });
+}
+
+function triggerBonus(amount){
+  document.getElementById('bonusAmount').textContent = `+${amount} Coins`;
+  openModal('bonusModal');
+  launchConfetti();
+  bumpBalance(amount);
+}
+
+/* ============ CLAIM DAILY ============ */
+function claimDailyReward(e){
+  const btn = document.getElementById('claimBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="shimmer" style="display:inline-block;width:100%;height:18px;border-radius:8px;"></span>`;
+  setTimeout(()=>{
+    triggerBonus(40);
+    btn.disabled = false;
+    btn.innerHTML = `${document.querySelector('.claim-btn svg')?.outerHTML || ''} Claim Daily Reward`;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7S9 2 6 2 3 5 6 7h6z"/><path d="M12 7s3-5 6-5 3 3 0 5h-6z"/></svg> Claim Daily Reward`;
+  },900);
+}
+
+function claimMission(e,i){
+  e.stopPropagation();
+  const m = missions[i];
+  triggerBonus(m.reward);
+  m.progress = 100;
+  renderMissions();
+}
+
+/* ============ BALANCE ANIM ============ */
+let balance = 2480, today = 180;
+function bumpBalance(amount){
+  balance += amount; today += amount;
+  animateCounter('balanceNum', balance);
+  animateCounter('todayEarn', today, '+');
+}
+function animateCounter(id, target, prefix=''){
+  const el = document.getElementById(id);
+  const start = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  const duration = 600;
+  const startTime = performance.now();
+  function step(now){
+    const p = Math.min((now-startTime)/duration, 1);
+    const eased = 1 - Math.pow(1-p, 3);
+    const val = Math.round(start + (target-start)*eased);
+    el.textContent = prefix + val.toLocaleString();
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ============ MODALS ============ */
+function openModal(id){
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('show');
+}
+function openWithdraw(){ openModal('withdrawModal'); }
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('click', e=>{ if(e.target===ov) ov.classList.remove('show'); });
+});
+
+function confirmWithdraw(e){
+  const amt = document.getElementById('withdrawAmount').value;
+  closeModal('withdrawModal');
+  showToast(`Withdrawal request of ${amt} coins submitted for review`);
+}
+
+/* ============ TOAST ============ */
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+
+/* ============ COPY REFERRAL ============ */
+function copyReferral(e){
+  e.stopPropagation();
+  const link = 'https://t.me/AdsRewardsBot?start=JAHAN2026';
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(link).then(()=>showToast('Referral link copied')).catch(()=>showToast('Referral link copied'));
+  } else {
+    showToast('Referral link copied');
+  }
+}
+
+/* ============ CONFETTI ============ */
+function launchConfetti(){
+  const canvas = document.getElementById('confettiCanvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const ctx = canvas.getContext('2d');
+  const colors = ['#229ED9','#3EB4F5','#F59E0B','#22C55E','#F5D97A'];
+  const pieces = Array.from({length:80}, ()=>({
+    x: canvas.width/2 + (Math.random()-0.5)*80,
+    y: canvas.height*0.35,
+    vx: (Math.random()-0.5)*10,
+    vy: -Math.random()*10-4,
+    size: Math.random()*6+4,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    rot: Math.random()*360,
+    vrot: (Math.random()-0.5)*10,
+    gravity: 0.25+Math.random()*0.1,
+  }));
+  let frame = 0;
+  function tick(){
+    frame++;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    let alive = false;
+    pieces.forEach(p=>{
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vrot;
+      if(p.y < canvas.height+20) alive = true;
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.6);
+      ctx.restore();
+    });
+    if(alive && frame<160) requestAnimationFrame(tick);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  tick();
+}
+window.addEventListener('resize', ()=>{
+  const canvas = document.getElementById('confettiCanvas');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
