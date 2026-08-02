@@ -809,9 +809,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* ============ API CONFIGURATION ============ */
+const API_BASE_URL = 'http://localhost:5000';
+let currentUser = null;
+
 /* ============ TELEGRAM WEBAPP SDK ============ */
+let tg = null;
 if(typeof Telegram !== 'undefined' && Telegram.WebApp){
-  const tg = Telegram.WebApp;
+  tg = Telegram.WebApp;
   tg.ready();
   tg.expand();
   
@@ -831,6 +836,52 @@ if(typeof Telegram !== 'undefined' && Telegram.WebApp){
     const subEl = document.querySelector('.user-sub');
     if(subEl && user.username) subEl.textContent = '@' + user.username;
   }
+}
+
+/* ============ AUTHENTICATION & INIT ============ */
+async function initializeApp(){
+  try {
+    if(tg && tg.initData){
+      const response = await fetch(`${API_BASE_URL}/api/auth`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({initData: tg.initData})
+      });
+      
+      if(response.ok){
+        const data = await response.json();
+        currentUser = data.user;
+        loadBalance();
+      } else {
+        showToast('Login failed, showing demo mode');
+      }
+    } else {
+      showToast('Demo mode: not in Telegram');
+    }
+  } catch(err) {
+    console.error('Init error:', err);
+    showToast('Connection error, using demo mode');
+  }
+}
+
+async function loadBalance(){
+  if(!currentUser) return;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/balance/${currentUser.telegram_id}`);
+    if(response.ok){
+      const data = await response.json();
+      balance = data.balance;
+      today = data.today_earned;
+      updateBalanceDisplay();
+    }
+  } catch(err) {
+    console.error('Balance load error:', err);
+  }
+}
+
+function updateBalanceDisplay(){
+  animateCounter('balanceNum', balance);
+  animateCounter('todayEarn', today, '+');
 }
 
 /* ============ ICON HELPERS ============ */
@@ -964,7 +1015,48 @@ function renderRedeem(){
 }
 renderRedeem();
 
-function renderHistory(filter='all'){
+async function renderHistory(filter='all'){
+  // Try to load from backend if user is authenticated
+  if(currentUser){
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/history/${currentUser.telegram_id}`);
+      if(response.ok){
+        const data = await response.json();
+        const transactions = data.transactions || [];
+        const filtered = filter==='all' ? transactions : transactions.filter(t=>t.type===filter);
+        document.getElementById('historyList').innerHTML = filtered.map(t=>{
+          const typeIcon = t.type==='ad' ? icon.play : (t.type==='withdraw' ? icon.arrowUp : (t.type==='referral' ? icon.users : icon.reward));
+          const amountClass = t.amount>0 ? 'pos' : 'neg';
+          const amountStr = (t.amount>0?'+':'') + t.amount;
+          const dateObj = new Date(t.created_at);
+          const dateStr = dateObj.toLocaleDateString() + ', ' + dateObj.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+          return `
+            <div class="timeline-item">
+              <div class="tl-icon">${typeIcon}</div>
+              <div class="tl-body">
+                <div class="tl-top">
+                  <span class="tl-title">${t.description}</span>
+                  <span class="tl-amount ${amountClass}">${amountStr}</span>
+                </div>
+                <div class="tl-meta">
+                  <span class="tl-date">${dateStr}</span>
+                  <span class="tl-status ${t.status}">${t.status[0].toUpperCase()+t.status.slice(1)}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('') || `<div style="text-align:center; color:var(--text-2); padding:40px 0; font-size:13px;">No transactions in this category</div>`;
+      }
+    } catch(err) {
+      console.error('Load history error:', err);
+      renderHistoryDemo(filter);
+    }
+  } else {
+    renderHistoryDemo(filter);
+  }
+}
+
+function renderHistoryDemo(filter='all'){
   const list = filter==='all' ? history : history.filter(h=>h.type===filter);
   document.getElementById('historyList').innerHTML = list.map(h=>`
     <div class="timeline-item">
@@ -982,6 +1074,7 @@ function renderHistory(filter='all'){
     </div>
   `).join('') || `<div style="text-align:center; color:var(--text-2); padding:40px 0; font-size:13px;">No transactions in this category</div>`;
 }
+
 renderHistory();
 
 function filterHistory(el,type){
@@ -1064,11 +1157,14 @@ window.addEventListener('load', ()=>{
   requestAnimationFrame(()=>{
     ring.style.strokeDashoffset = circumference - (circumference*pct);
   });
+  
+  // Initialize app on page load
+  initializeApp();
 });
 
 /* ============ WATCH AD FLOW ============ */
 let watchingBusy = false;
-function watchAd(e, containerId, index, reward){
+async function watchAd(e, containerId, index, reward){
   e.stopPropagation();
   if(watchingBusy) return;
   watchingBusy = true;
@@ -1077,17 +1173,49 @@ function watchAd(e, containerId, index, reward){
   let t = 5;
   timerEl.textContent = t;
   overlay.classList.add('show');
-  const interval = setInterval(()=>{
+  
+  const interval = setInterval(async ()=>{
     t--;
     timerEl.textContent = t;
     if(t<=0){
       clearInterval(interval);
       overlay.classList.remove('show');
       watchingBusy = false;
-      markWatched(containerId, index);
-      triggerBonus(reward);
+      
+      // Call backend API to record ad watch
+      if(currentUser){
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/watch-ad`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              telegram_id: currentUser.telegram_id,
+              reward: reward,
+              ad_id: `ad-${index}`
+            })
+          });
+          
+          if(response.ok){
+            const data = await response.json();
+            markWatched(containerId, index);
+            balance = data.new_balance;
+            triggerBonus(reward);
+            loadBalance();
+          } else {
+            const err = await response.json();
+            showToast(err.error || 'Failed to process ad reward');
+          }
+        } catch(err) {
+          console.error('Watch ad error:', err);
+          showToast('Connection error, please try again');
+        }
+      } else {
+        // Demo mode
+        markWatched(containerId, index);
+        triggerBonus(reward);
+      }
     }
-  },1000);
+  }, 1000);
 }
 
 function markWatched(containerId, index){
@@ -1159,10 +1287,48 @@ document.querySelectorAll('.modal-overlay').forEach(ov=>{
   ov.addEventListener('click', e=>{ if(e.target===ov) ov.classList.remove('show'); });
 });
 
-function confirmWithdraw(e){
-  const amt = document.getElementById('withdrawAmount').value;
-  closeModal('withdrawModal');
-  showToast(`Withdrawal request of ${amt} coins submitted for review`);
+async function confirmWithdraw(e){
+  e.preventDefault();
+  const amt = parseInt(document.getElementById('withdrawAmount').value);
+  const method = document.querySelector('.method-pick.selected .m-name')?.textContent || 'bKash';
+  
+  if(!amt || amt < 100){
+    showToast('Minimum withdrawal is 100 coins');
+    return;
+  }
+  
+  if(!currentUser){
+    showToast('Please login first');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/withdraw`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        telegram_id: currentUser.telegram_id,
+        method: method,
+        amount: amt,
+        account_number: 'pending' // placeholder for demo
+      })
+    });
+    
+    if(response.ok){
+      const data = await response.json();
+      closeModal('withdrawModal');
+      showToast(`Withdrawal of ${amt} coins submitted for review`);
+      balance = data.new_balance;
+      animateCounter('balanceNum', balance);
+      loadBalance();
+    } else {
+      const err = await response.json();
+      showToast(err.error || 'Withdrawal failed');
+    }
+  } catch(err) {
+    console.error('Withdraw error:', err);
+    showToast('Connection error, please try again');
+  }
 }
 
 /* ============ TOAST ============ */
