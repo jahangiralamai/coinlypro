@@ -841,22 +841,22 @@ if(typeof Telegram !== 'undefined' && Telegram.WebApp){
 /* ============ AUTHENTICATION & INIT ============ */
 async function initializeApp(){
   try {
-    if(tg && tg.initData){
-      const response = await fetch(`${API_BASE_URL}/api/auth`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({initData: tg.initData})
-      });
-      
-      if(response.ok){
-        const data = await response.json();
-        currentUser = data.user;
-        loadBalance();
-      } else {
-        showToast('Login failed, showing demo mode');
-      }
+    // Try to authenticate with backend
+    const initData = (tg && tg.initData) ? tg.initData : 'demo_mode=true';
+    
+    const response = await fetch(`${API_BASE_URL}/api/auth`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({initData: initData})
+    });
+    
+    if(response.ok){
+      const data = await response.json();
+      currentUser = data.user;
+      loadBalance();
+      // Connection successful - don't show error message
     } else {
-      showToast('Demo mode: not in Telegram');
+      throw new Error('Auth failed');
     }
   } catch(err) {
     console.error('Init error:', err);
