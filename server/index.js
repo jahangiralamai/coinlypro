@@ -1,45 +1,59 @@
 require('dotenv').config();
 const express = require('express');
-const { MongoClient, ObjectId } = require('mongodb');
 const crypto = require('crypto-js');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/ads-rewards';
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 
-let db = null;
+// In-memory database (for development, persisted to JSON file)
+const DB_FILE = path.join(__dirname, 'db.json');
+
+let db = {
+  users: {},
+  transactions: [],
+  withdrawals: [],
+  adCooldowns: {} // Track ad watch cooldowns
+};
+
+// Load database from file
+function loadDB() {
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const data = fs.readFileSync(DB_FILE, 'utf8');
+      db = JSON.parse(data);
+    }
+  } catch (err) {
+    console.warn('Could not load database file, using fresh data');
+    db = { users: {}, transactions: [], withdrawals: [], adCooldowns: {} };
+  }
+}
+
+// Save database to file
+function saveDB() {
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.error('Could not save database:', err.message);
+  }
+}
+
+// Load database on startup
+loadDB();
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Connect to MongoDB
-async function connectDB() {
-  try {
-    const client = new MongoClient(MONGODB_URI);
-    await client.connect();
-    db = client.db('ads-rewards');
-    
-    // Create collections if they don't exist
-    await db.createCollection('users').catch(() => {});
-    await db.createCollection('transactions').catch(() => {});
-    await db.createCollection('withdrawals').catch(() => {});
-    
-    // Create indexes
-    await db.collection('users').createIndex({ telegram_id: 1 }, { unique: true }).catch(() => {});
-    await db.collection('transactions').createIndex({ telegram_id: 1 }).catch(() => {});
-    await db.collection('withdrawals').createIndex({ telegram_id: 1 }).catch(() => {});
-    
-    console.log('✅ MongoDB connected successfully');
-  } catch (error) {
-    console.error('❌ MongoDB connection failed:', error.message);
-    process.exit(1);
-  }
-}
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Helper: Validate Telegram initData (simple validation)
 function validateTelegramData(initData) {
@@ -53,7 +67,7 @@ function validateTelegramData(initData) {
   }
 }
 
-// Helper: Rate limiting (in-memory, simple)
+// Helper: Rate limiting (in-memory)
 const rateLimitMap = {};
 function checkRateLimit(key, maxRequests = 5, windowMs = 3600000) {
   const now = Date.now();
@@ -68,10 +82,28 @@ function checkRateLimit(key, maxRequests = 5, windowMs = 3600000) {
   return true;
 }
 
+// Helper: Get or create user
+function getOrCreateUser(telegramId, user = {}) {
+  if (!db.users[telegramId]) {
+    db.users[telegramId] = {
+      telegram_id: telegramId,
+      name: user.first_name || 'User',
+      username: user.username || '',
+      balance: 2480,
+      today_earned: 180,
+      lifetime_earned: 18940,
+      referral_code: `USER${telegramId}`,
+      created_at: new Date().toISOString()
+    };
+    saveDB();
+  }
+  return db.users[telegramId];
+}
+
 // ============ API ENDPOINTS ============
 
 // POST /api/auth - Authenticate user via Telegram
-app.post('/api/auth', async (req, res) => {
+app.post('/api/auth', (req, res) => {
   try {
     const { initData } = req.body;
     const user = validateTelegramData(initData);
@@ -81,66 +113,46 @@ app.post('/api/auth', async (req, res) => {
     }
     
     const telegramId = user.id.toString();
-    const usersCol = db.collection('users');
-    
-    // Find or create user
-    let dbUser = await usersCol.findOne({ telegram_id: telegramId });
-    
-    if (!dbUser) {
-      dbUser = {
-        telegram_id: telegramId,
-        first_name: user.first_name || 'User',
-        username: user.username || null,
-        coin_balance: 0,
-        today_earned: 0,
-        lifetime_earned: 0,
-        created_at: new Date(),
-        updated_at: new Date(),
-      };
-      await usersCol.insertOne(dbUser);
-    }
+    const userData = getOrCreateUser(telegramId, user);
     
     res.json({
       success: true,
       user: {
-        telegram_id: dbUser.telegram_id,
-        first_name: dbUser.first_name,
-        username: dbUser.username,
-        coin_balance: dbUser.coin_balance,
-        today_earned: dbUser.today_earned,
-        lifetime_earned: dbUser.lifetime_earned,
-      },
+        telegram_id: telegramId,
+        name: user.first_name,
+        username: user.username,
+        balance: userData.balance,
+        today_earned: userData.today_earned,
+        lifetime_earned: userData.lifetime_earned
+      }
     });
-  } catch (error) {
-    console.error('Auth error:', error);
+  } catch (err) {
+    console.error('Auth error:', err);
     res.status(500).json({ error: 'Authentication failed' });
   }
 });
 
-// GET /api/balance/:telegram_id - Get user balance and stats
-app.get('/api/balance/:telegram_id', async (req, res) => {
+// GET /api/balance/:telegram_id - Get user balance
+app.get('/api/balance/:telegram_id', (req, res) => {
   try {
-    const { telegram_id } = req.params;
-    const user = await db.collection('users').findOne({ telegram_id });
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const telegramId = req.params.telegram_id;
+    const user = getOrCreateUser(telegramId);
     
     res.json({
-      balance: user.coin_balance,
+      balance: user.balance,
       today_earned: user.today_earned,
       lifetime_earned: user.lifetime_earned,
-      daily_goal_progress: Math.min(user.today_earned, 400),
+      daily_goal: 260,
+      daily_goal_max: 400
     });
-  } catch (error) {
-    console.error('Balance error:', error);
+  } catch (err) {
+    console.error('Balance error:', err);
     res.status(500).json({ error: 'Failed to fetch balance' });
   }
 });
 
-// POST /api/watch-ad - Record ad watch and award coins
-app.post('/api/watch-ad', async (req, res) => {
+// POST /api/watch-ad - Record ad watch and reward user
+app.post('/api/watch-ad', (req, res) => {
   try {
     const { telegram_id, reward, ad_id } = req.body;
     
@@ -148,195 +160,162 @@ app.post('/api/watch-ad', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    // Rate limiting: max 5 ads per hour
-    if (!checkRateLimit(`ad-${telegram_id}`, 5, 3600000)) {
-      return res.status(429).json({ error: 'Too many ad requests. Try again later.' });
+    // Check rate limit (max 5 ads per hour)
+    if (!checkRateLimit(`ad_${telegram_id}`, 5, 3600000)) {
+      return res.status(429).json({ error: 'Too many ads watched. Try again later.' });
     }
     
-    // Check if ad was already watched recently (cooldown: 5 minutes)
-    const recentAd = await db.collection('transactions').findOne({
-      telegram_id,
-      type: 'ad',
-      ad_id,
-      created_at: { $gt: new Date(Date.now() - 5 * 60000) },
-    });
-    
-    if (recentAd) {
-      return res.status(400).json({ error: 'This ad was recently watched. Try another ad.' });
+    // Check ad cooldown (can't watch same ad within 5 minutes)
+    const cooldownKey = `ad_${telegram_id}_${ad_id}`;
+    if (db.adCooldowns[cooldownKey]) {
+      const timeSinceLastWatch = Date.now() - db.adCooldowns[cooldownKey];
+      if (timeSinceLastWatch < 5 * 60 * 1000) { // 5 minutes
+        return res.status(429).json({ error: 'This ad was recently watched. Try another ad.' });
+      }
     }
     
-    const usersCol = db.collection('users');
-    const transactionsCol = db.collection('transactions');
-    
-    // Update user balance
-    const updateResult = await usersCol.findOneAndUpdate(
-      { telegram_id },
-      {
-        $inc: {
-          coin_balance: reward,
-          today_earned: reward,
-          lifetime_earned: reward,
-        },
-        $set: { updated_at: new Date() },
-      },
-      { returnDocument: 'after' }
-    );
-    
-    if (!updateResult.value) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = getOrCreateUser(telegram_id);
+    user.balance += reward;
+    user.today_earned += reward;
+    user.lifetime_earned += reward;
     
     // Record transaction
-    await transactionsCol.insertOne({
+    db.transactions.push({
       telegram_id,
       type: 'ad',
-      ad_id,
+      description: `Ad watched — Reward earned`,
       amount: reward,
       status: 'success',
-      created_at: new Date(),
+      ad_id,
+      created_at: new Date().toISOString()
     });
+    
+    // Record ad cooldown
+    db.adCooldowns[cooldownKey] = Date.now();
+    
+    saveDB();
     
     res.json({
       success: true,
-      new_balance: updateResult.value.coin_balance,
+      new_balance: user.balance,
       reward_amount: reward,
+      message: `Earned ${reward} coins!`
     });
-  } catch (error) {
-    console.error('Watch ad error:', error);
+  } catch (err) {
+    console.error('Watch ad error:', err);
     res.status(500).json({ error: 'Failed to process ad reward' });
   }
 });
 
-// GET /api/history/:telegram_id - Get transaction history
-app.get('/api/history/:telegram_id', async (req, res) => {
+// GET /api/history/:telegram_id - Get user transaction history
+app.get('/api/history/:telegram_id', (req, res) => {
   try {
-    const { telegram_id } = req.params;
-    const { limit = 20, skip = 0 } = req.query;
+    const telegramId = req.params.telegram_id;
     
-    const transactions = await db.collection('transactions')
-      .find({ telegram_id })
-      .sort({ created_at: -1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(skip))
-      .toArray();
+    // Get all transactions for this user, sorted by date (newest first)
+    const userTransactions = db.transactions
+      .filter(t => t.telegram_id === telegramId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 50); // Last 50 transactions
     
     res.json({
-      transactions: transactions.map(t => ({
-        id: t._id,
-        type: t.type,
-        amount: t.amount,
-        status: t.status,
-        created_at: t.created_at,
-        description: getTransactionDescription(t),
-      })),
+      transactions: userTransactions
     });
-  } catch (error) {
-    console.error('History error:', error);
+  } catch (err) {
+    console.error('History error:', err);
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
 
-// POST /api/withdraw - Create withdrawal request
-app.post('/api/withdraw', async (req, res) => {
+// POST /api/withdraw - Request withdrawal
+app.post('/api/withdraw', (req, res) => {
   try {
     const { telegram_id, method, amount, account_number } = req.body;
     
-    if (!telegram_id || !method || !amount || !account_number) {
+    if (!telegram_id || !method || !amount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
-    const amountNum = parseInt(amount);
-    
     // Validate minimum withdrawal
-    if (amountNum < 100) {
+    if (amount < 100) {
       return res.status(400).json({ error: 'Minimum withdrawal is 100 coins' });
     }
     
-    // Rate limiting: max 3 withdrawal requests per day
-    if (!checkRateLimit(`withdraw-${telegram_id}`, 3, 86400000)) {
-      return res.status(429).json({ error: 'Too many withdrawal requests. Try again tomorrow.' });
-    }
-    
-    const usersCol = db.collection('users');
-    const withdrawalsCol = db.collection('withdrawals');
+    const user = getOrCreateUser(telegram_id);
     
     // Check balance
-    const user = await usersCol.findOne({ telegram_id });
-    if (!user || user.coin_balance < amountNum) {
+    if (user.balance < amount) {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
     
-    // Deduct coins immediately (prevent double-spend)
-    const updateResult = await usersCol.findOneAndUpdate(
-      { telegram_id },
-      {
-        $inc: { coin_balance: -amountNum },
-        $set: { updated_at: new Date() },
-      },
-      { returnDocument: 'after' }
-    );
-    
-    if (!updateResult.value) {
-      return res.status(404).json({ error: 'User not found' });
+    // Check rate limit (max 3 withdrawals per day)
+    const today = new Date().toDateString();
+    const withdrawalTodayKey = `withdraw_${telegram_id}_${today}`;
+    if (!checkRateLimit(withdrawalTodayKey, 3, 24 * 3600000)) {
+      return res.status(429).json({ error: 'Maximum 3 withdrawals per day. Try tomorrow.' });
     }
     
+    // Deduct balance immediately (prevent double-spend)
+    user.balance -= amount;
+    
     // Create withdrawal record
-    const withdrawal = {
+    const withdrawalId = `w_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    db.withdrawals.push({
+      id: withdrawalId,
       telegram_id,
       method,
-      amount: amountNum,
-      account_number,
+      amount,
+      account_number: account_number || 'pending',
       status: 'pending',
-      created_at: new Date(),
-      updated_at: new Date(),
-    };
+      created_at: new Date().toISOString()
+    });
     
-    const insertResult = await withdrawalsCol.insertOne(withdrawal);
+    // Record transaction
+    db.transactions.push({
+      telegram_id,
+      type: 'withdraw',
+      description: `Withdrawal request — ${method}`,
+      amount: -amount,
+      status: 'pending',
+      withdrawal_id: withdrawalId,
+      created_at: new Date().toISOString()
+    });
+    
+    saveDB();
     
     res.json({
       success: true,
-      withdrawal_id: insertResult.insertedId,
+      withdrawal_id: withdrawalId,
+      new_balance: user.balance,
+      amount,
+      method,
       status: 'pending',
-      amount: amountNum,
-      new_balance: updateResult.value.coin_balance,
+      message: `Withdrawal request submitted for review`
     });
-  } catch (error) {
-    console.error('Withdrawal error:', error);
+  } catch (err) {
+    console.error('Withdraw error:', err);
     res.status(500).json({ error: 'Failed to process withdrawal' });
   }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
-});
-
-// Helper function to get transaction description
-function getTransactionDescription(transaction) {
-  switch (transaction.type) {
-    case 'ad':
-      return `Ad watched - ${transaction.amount} coins earned`;
-    case 'reward':
-      return `Daily reward - ${transaction.amount} coins`;
-    case 'withdraw':
-      return `Withdrawal - ${transaction.amount} coins`;
-    case 'referral':
-      return `Referral bonus - ${transaction.amount} coins`;
-    default:
-      return `Transaction - ${transaction.amount} coins`;
+// GET /api/user/:telegram_id - Get full user data
+app.get('/api/user/:telegram_id', (req, res) => {
+  try {
+    const telegramId = req.params.telegram_id;
+    const user = getOrCreateUser(telegramId);
+    
+    res.json({
+      user
+    });
+  } catch (err) {
+    console.error('User error:', err);
+    res.status(500).json({ error: 'Failed to fetch user data' });
   }
-}
+});
 
 // Start server
-connectDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Backend server running on http://localhost:${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  });
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('Server shutting down...');
-  process.exit(0);
+app.listen(PORT, () => {
+  console.log(`\n🚀 Backend server running on http://localhost:${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`💾 Database: In-memory (persisted to db.json)\n`);
 });
