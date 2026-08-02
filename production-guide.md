@@ -102,7 +102,7 @@ STAGE: Backend server and database
 Create a new backend folder called "server" inside this project (separate 
 from index.html — do not touch index.html in this stage yet).
 
-Build a Node.js + Express backend with a SQLite database (using better-sqlite3 
+Build a Node.js + Express backend with a mongodb database (using mongodb
 or similar) that includes:
 
 1. A "users" table: telegram_id, first_name, username, coin_balance, 
