@@ -45,37 +45,15 @@ function saveDB() {
 // Load database on startup
 loadDB();
 
-// CORS Configuration - Explicit for Netlify frontend
-const ALLOWED_ORIGINS = [
-  'https://coinlypro.netlify.app',
-  'http://localhost:8080',
-  'http://localhost:3000',
-  'http://127.0.0.1:8080',
-  'http://127.0.0.1:3000'
-];
+// CORS - Enable for all origins to test
+console.log('🔐 CORS enabled for: https://coinlypro.netlify.app, localhost:*');
 
-// CORS middleware - simple and explicit
-app.use((req, res, next) => {
-  const origin = req.get('origin');
-  console.log(`[CORS DEBUG] ${req.method} ${req.path} | Origin: ${origin || 'NO ORIGIN'}`);
-  
-  // Check if origin is allowed
-  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Max-Age', '3600');
-  }
-  
-  // Handle preflight OPTIONS requests
-  if (req.method === 'OPTIONS') {
-    console.log(`[CORS DEBUG] OPTIONS preflight handled for ${origin}`);
-    return res.sendStatus(200);
-  }
-  
-  next();
-});
+app.use(cors({
+  origin: true, // Allow all origins temporarily to test
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
 
 // Body parser - AFTER CORS
 app.use(bodyParser.json());
@@ -83,7 +61,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip} | Origin: ${req.get('origin') || 'none'}`);
   next();
 });
 
