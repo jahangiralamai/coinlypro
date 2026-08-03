@@ -817,6 +817,9 @@ const API_BASE_URL =
     ? 'http://localhost:5000'
     : 'https://coinlypro-production-20dd.up.railway.app';
 
+// Cache bust - timestamp to force reload
+const CACHE_BUST = '20260803-1109';
+
 // Debug: Show API URL on screen
 console.log(`🔗 API_BASE_URL resolved to: ${API_BASE_URL}`);
 console.log(`🌐 Current hostname: ${window.location.hostname}`);
