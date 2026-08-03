@@ -45,50 +45,45 @@ function saveDB() {
 // Load database on startup
 loadDB();
 
-// CORS configuration - explicit headers for maximum compatibility
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'https://coinlypro.netlify.app',
-      'http://localhost:8080',
-      'http://localhost:3000',
-      'http://127.0.0.1:8080',
-      'http://127.0.0.1:3000'
-    ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  exposedHeaders: ['Content-Length', 'X-JSON-Response'],
-  optionsSuccessStatus: 200
-};
+// CORS Configuration - Explicit for Netlify frontend
+const ALLOWED_ORIGINS = [
+  'https://coinlypro.netlify.app',
+  'http://localhost:8080',
+  'http://localhost:3000',
+  'http://127.0.0.1:8080',
+  'http://127.0.0.1:3000'
+];
 
-// Apply CORS FIRST before any other middleware
-app.use(cors(corsOptions));
+// CORS middleware - simple and explicit
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  console.log(`[CORS DEBUG] ${req.method} ${req.path} | Origin: ${origin || 'NO ORIGIN'}`);
+  
+  // Check if origin is allowed
+  if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Max-Age', '3600');
+  }
+  
+  // Handle preflight OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    console.log(`[CORS DEBUG] OPTIONS preflight handled for ${origin}`);
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
 
-// Then body parser
+// Body parser - AFTER CORS
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip} | Origin: ${req.get('origin') || 'none'} | Host: ${req.get('host')}`);
-  next();
-});
-
-// Add explicit CORS response headers middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.get('origin') || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip}`);
   next();
 });
 
