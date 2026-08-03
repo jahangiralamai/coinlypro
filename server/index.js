@@ -45,23 +45,33 @@ function saveDB() {
 // Load database on startup
 loadDB();
 
-// Middleware
-app.use(cors({
-  origin: [
-    'https://coinlypro.netlify.app',
-    'http://localhost:8080',
-    'http://localhost:3000',
-    'http://127.0.0.1:8080',
-    'http://127.0.0.1:3000'
-  ],
+// CORS configuration - explicit headers for maximum compatibility
+const corsOptions = {
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'https://coinlypro.netlify.app',
+      'http://localhost:8080',
+      'http://localhost:3000',
+      'http://127.0.0.1:8080',
+      'http://127.0.0.1:3000'
+    ];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Content-Length', 'X-JSON-Response'],
   optionsSuccessStatus: 200
-}));
+};
 
-// Explicitly handle preflight requests
-app.use(cors());
+// Middleware
+app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
