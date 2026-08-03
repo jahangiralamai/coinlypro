@@ -46,7 +46,16 @@ function saveDB() {
 loadDB();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://coinlypro.netlify.app',
+    'http://localhost:8080',
+    'http://localhost:3000',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:3000'
+  ],
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
