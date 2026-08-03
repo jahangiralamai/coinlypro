@@ -45,13 +45,29 @@ function saveDB() {
 // Load database on startup
 loadDB();
 
-// CORS - Enable for all origins to test
-console.log('🔐 CORS enabled for: https://coinlypro.netlify.app, localhost:*');
+// FORCE CORS HEADERS - FIRST MIDDLEWARE
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, X-API-Key');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  
+  if (req.method === 'OPTIONS') {
+    console.log(`✓ OPTIONS preflight: ${req.path}`);
+    return res.sendStatus(200);
+  }
+  next();
+});
 
+console.log('🔐 CORS HEADERS FORCED - Allow-Origin: *');
+
+// CORS - backup using package
 app.use(cors({
-  origin: true, // Allow all origins temporarily to test
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  credentials: true,
+  origin: '*',
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
   optionsSuccessStatus: 200
 }));
 
