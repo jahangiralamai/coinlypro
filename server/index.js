@@ -346,5 +346,6 @@ app.get('/api/user/:telegram_id', (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`💾 Database: In-memory (persisted to db.json)\n`);
+  console.log(`💾 Database: In-memory (persisted to db.json)`);
+  console.log(`🔐 CORS enabled for: https://coinlypro.netlify.app\n`);
 });
