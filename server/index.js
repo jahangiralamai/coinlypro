@@ -70,15 +70,25 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
-// Middleware
+// Apply CORS FIRST before any other middleware
 app.use(cors(corsOptions));
 
+// Then body parser
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} from ${req.ip} | Origin: ${req.get('origin') || 'none'} | Host: ${req.get('host')}`);
+  next();
+});
+
+// Add explicit CORS response headers middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.get('origin') || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
   next();
 });
 
