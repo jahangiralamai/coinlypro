@@ -807,6 +807,7 @@
 
 <canvas id="confettiCanvas"></canvas>
 <div class="toast" id="toast"></div>
+<div id="debugBox" style="position:fixed; bottom:calc(100px + var(--safe-bottom)); left:18px; right:18px; z-index:120; max-width:444px;"></div>
 
 <script>
 /* ============ API CONFIGURATION ============ */
@@ -816,6 +817,45 @@ const API_BASE_URL =
     ? 'http://localhost:5000'
     : 'https://coinlypro-production.up.railway.app';
 let currentUser = null;
+
+/* ============ DEBUG LOGGING ============ */
+let debugLogs = [];
+const MAX_DEBUG_LOGS = 20;
+
+function addDebugLog(endpoint, method, status, errorType, errorMsg) {
+  const timestamp = new Date().toLocaleTimeString();
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  const logEntry = {
+    timestamp,
+    url: fullUrl,
+    method,
+    status: status || 'PENDING',
+    errorType: errorType || 'NONE',
+    errorMsg: errorMsg || ''
+  };
+  debugLogs.unshift(logEntry);
+  if(debugLogs.length > MAX_DEBUG_LOGS) debugLogs.pop();
+  updateDebugBox();
+  console.log('[API DEBUG]', logEntry);
+}
+
+function updateDebugBox() {
+  const box = document.getElementById('debugBox');
+  if(!box) return;
+  box.innerHTML = `
+    <div style="padding:10px; background:var(--card); border-radius:12px; border:1px solid var(--border); font-family:monospace; font-size:11px; max-height:180px; overflow-y:auto;">
+      <div style="font-weight:700; color:var(--accent); margin-bottom:8px;">🔍 API DEBUG LOG (Last ${debugLogs.length})</div>
+      ${debugLogs.map((log, i) => `
+        <div style="margin-bottom:6px; padding:6px; background:${log.errorType === 'NONE' ? 'rgba(34,197,94,.1)' : 'rgba(239,68,68,.1)'}; border-radius:6px; border-left:3px solid ${log.errorType === 'NONE' ? 'var(--success)' : 'var(--danger)'};">
+          <div style="color:${log.errorType === 'NONE' ? 'var(--success)' : 'var(--danger)'}; font-weight:600;">${log.timestamp}</div>
+          <div style="color:var(--text-1); margin-top:2px;">${log.method} ${log.url}</div>
+          <div style="color:var(--text-2); margin-top:2px;">Status: ${log.status}</div>
+          ${log.errorType !== 'NONE' ? `<div style="color:var(--danger); margin-top:2px;">${log.errorType}: ${log.errorMsg}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
 
 /* ============ TELEGRAM WEBAPP SDK ============ */
 let tg = null;
@@ -844,6 +884,7 @@ if(typeof Telegram !== 'undefined' && Telegram.WebApp){
 
 /* ============ AUTHENTICATION & INIT ============ */
 async function initializeApp(){
+  addDebugLog('/api/auth', 'POST', 'SENDING', 'NONE', '');
   try {
     // Try to authenticate with backend
     const initData = (tg && tg.initData) ? tg.initData : 'demo_mode=true';
@@ -857,12 +898,18 @@ async function initializeApp(){
     if(response.ok){
       const data = await response.json();
       currentUser = data.user;
+      addDebugLog('/api/auth', 'POST', response.status, 'NONE', 'User authenticated');
       loadBalance();
       // Connection successful - don't show error message
     } else {
-      throw new Error('Auth failed');
+      const errData = await response.text();
+      addDebugLog('/api/auth', 'POST', response.status, 'HTTP_ERROR', `Status ${response.status}: ${errData.substring(0, 100)}`);
+      throw new Error(`Auth failed: ${response.status}`);
     }
   } catch(err) {
+    const errorMsg = err.message || err.toString();
+    const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
+    addDebugLog('/api/auth', 'POST', 'FAILED', errorType, errorMsg);
     console.error('Init error:', err);
     showToast('Connection error, using demo mode');
   }
@@ -870,15 +917,23 @@ async function initializeApp(){
 
 async function loadBalance(){
   if(!currentUser) return;
+  addDebugLog(`/api/balance/${currentUser.telegram_id}`, 'GET', 'SENDING', 'NONE', '');
   try {
     const response = await fetch(`${API_BASE_URL}/api/balance/${currentUser.telegram_id}`);
     if(response.ok){
       const data = await response.json();
       balance = data.balance;
       today = data.today_earned;
+      addDebugLog(`/api/balance/${currentUser.telegram_id}`, 'GET', response.status, 'NONE', 'Balance loaded');
       updateBalanceDisplay();
+    } else {
+      const errData = await response.text();
+      addDebugLog(`/api/balance/${currentUser.telegram_id}`, 'GET', response.status, 'HTTP_ERROR', `Status ${response.status}: ${errData.substring(0, 100)}`);
     }
   } catch(err) {
+    const errorMsg = err.message || err.toString();
+    const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
+    addDebugLog(`/api/balance/${currentUser.telegram_id}`, 'GET', 'FAILED', errorType, errorMsg);
     console.error('Balance load error:', err);
   }
 }
@@ -1022,11 +1077,13 @@ renderRedeem();
 async function renderHistory(filter='all'){
   // Try to load from backend if user is authenticated
   if(currentUser){
+    addDebugLog(`/api/history/${currentUser.telegram_id}`, 'GET', 'SENDING', 'NONE', `Filter: ${filter}`);
     try {
       const response = await fetch(`${API_BASE_URL}/api/history/${currentUser.telegram_id}`);
       if(response.ok){
         const data = await response.json();
         const transactions = data.transactions || [];
+        addDebugLog(`/api/history/${currentUser.telegram_id}`, 'GET', response.status, 'NONE', `Loaded ${transactions.length} transactions`);
         const filtered = filter==='all' ? transactions : transactions.filter(t=>t.type===filter);
         document.getElementById('historyList').innerHTML = filtered.map(t=>{
           const typeIcon = t.type==='ad' ? icon.play : (t.type==='withdraw' ? icon.arrowUp : (t.type==='referral' ? icon.users : icon.reward));
@@ -1188,6 +1245,7 @@ async function watchAd(e, containerId, index, reward){
       
       // Call backend API to record ad watch
       if(currentUser){
+        addDebugLog('/api/watch-ad', 'POST', 'SENDING', 'NONE', '');
         try {
           const response = await fetch(`${API_BASE_URL}/api/watch-ad`, {
             method: 'POST',
@@ -1201,15 +1259,20 @@ async function watchAd(e, containerId, index, reward){
           
           if(response.ok){
             const data = await response.json();
+            addDebugLog('/api/watch-ad', 'POST', response.status, 'NONE', `Reward: ${reward} coins`);
             markWatched(containerId, index);
             balance = data.new_balance;
             triggerBonus(reward);
             loadBalance();
           } else {
             const err = await response.json();
+            addDebugLog('/api/watch-ad', 'POST', response.status, 'HTTP_ERROR', `Status ${response.status}: ${err.error || 'Failed'}`);
             showToast(err.error || 'Failed to process ad reward');
           }
         } catch(err) {
+          const errorMsg = err.message || err.toString();
+          const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
+          addDebugLog('/api/watch-ad', 'POST', 'FAILED', errorType, errorMsg);
           console.error('Watch ad error:', err);
           showToast('Connection error, please try again');
         }
@@ -1306,6 +1369,7 @@ async function confirmWithdraw(e){
     return;
   }
   
+  addDebugLog('/api/withdraw', 'POST', 'SENDING', 'NONE', `Method: ${method}, Amount: ${amt}`);
   try {
     const response = await fetch(`${API_BASE_URL}/api/withdraw`, {
       method: 'POST',
@@ -1314,12 +1378,13 @@ async function confirmWithdraw(e){
         telegram_id: currentUser.telegram_id,
         method: method,
         amount: amt,
-        account_number: 'pending' // placeholder for demo
+        account_number: 'pending'
       })
     });
     
     if(response.ok){
       const data = await response.json();
+      addDebugLog('/api/withdraw', 'POST', response.status, 'NONE', `Withdrawal approved`);
       closeModal('withdrawModal');
       showToast(`Withdrawal of ${amt} coins submitted for review`);
       balance = data.new_balance;
@@ -1327,9 +1392,13 @@ async function confirmWithdraw(e){
       loadBalance();
     } else {
       const err = await response.json();
+      addDebugLog('/api/withdraw', 'POST', response.status, 'HTTP_ERROR', `Status ${response.status}: ${err.error || 'Failed'}`);
       showToast(err.error || 'Withdrawal failed');
     }
   } catch(err) {
+    const errorMsg = err.message || err.toString();
+    const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
+    addDebugLog('/api/withdraw', 'POST', 'FAILED', errorType, errorMsg);
     console.error('Withdraw error:', err);
     showToast('Connection error, please try again');
   }

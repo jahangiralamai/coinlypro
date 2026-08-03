@@ -61,6 +61,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Health check
 app.get('/health', (req, res) => {
+  console.log(`[${new Date().toISOString()}] GET /health from ${req.ip} | Origin: ${req.get('origin') || 'none'}`);
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -113,11 +114,13 @@ function getOrCreateUser(telegramId, user = {}) {
 
 // POST /api/auth - Authenticate user via Telegram
 app.post('/api/auth', (req, res) => {
+  console.log(`[${new Date().toISOString()}] POST /api/auth from ${req.ip} | Origin: ${req.get('origin') || 'none'}`);
   try {
     const { initData } = req.body;
     const user = validateTelegramData(initData);
     
     if (!user || !user.id) {
+      console.log(`[${new Date().toISOString()}] AUTH FAILED: Invalid Telegram data`);
       return res.status(400).json({ error: 'Invalid Telegram data' });
     }
     
@@ -143,6 +146,7 @@ app.post('/api/auth', (req, res) => {
 
 // GET /api/balance/:telegram_id - Get user balance
 app.get('/api/balance/:telegram_id', (req, res) => {
+  console.log(`[${new Date().toISOString()}] GET /api/balance/${req.params.telegram_id} from ${req.ip}`);
   try {
     const telegramId = req.params.telegram_id;
     const user = getOrCreateUser(telegramId);
@@ -162,6 +166,7 @@ app.get('/api/balance/:telegram_id', (req, res) => {
 
 // POST /api/watch-ad - Record ad watch and reward user
 app.post('/api/watch-ad', (req, res) => {
+  console.log(`[${new Date().toISOString()}] POST /api/watch-ad from ${req.ip} | User: ${req.body.telegram_id} | Reward: ${req.body.reward}`);
   try {
     const { telegram_id, reward, ad_id } = req.body;
     
@@ -218,6 +223,7 @@ app.post('/api/watch-ad', (req, res) => {
 
 // GET /api/history/:telegram_id - Get user transaction history
 app.get('/api/history/:telegram_id', (req, res) => {
+  console.log(`[${new Date().toISOString()}] GET /api/history/${req.params.telegram_id} from ${req.ip}`);
   try {
     const telegramId = req.params.telegram_id;
     
@@ -238,6 +244,7 @@ app.get('/api/history/:telegram_id', (req, res) => {
 
 // POST /api/withdraw - Request withdrawal
 app.post('/api/withdraw', (req, res) => {
+  console.log(`[${new Date().toISOString()}] POST /api/withdraw from ${req.ip} | User: ${req.body.telegram_id} | Method: ${req.body.method} | Amount: ${req.body.amount}`);
   try {
     const { telegram_id, method, amount, account_number } = req.body;
     
