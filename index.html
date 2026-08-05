@@ -811,14 +811,14 @@
 
 <script>
 /* ============ API CONFIGURATION ============ */
-const API_BASE_URL = 
-  window.location.hostname === 'localhost' || 
-  window.location.hostname === '127.0.0.1'
+const PRODUCTION_API_BASE_URL = 'https://coinlypro-production-20dd.up.railway.app';
+const API_BASE_URL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000'
-    : 'https://coinlypro-production-20dd.up.railway.app';
+    : PRODUCTION_API_BASE_URL;
 
 // Cache bust - timestamp to force reload
-const CACHE_BUST = '20260803-1109';
+const CACHE_BUST = '20260805-0729';
 
 // Debug: Show API URL on screen
 console.log(`🔗 API_BASE_URL resolved to: ${API_BASE_URL}`);
