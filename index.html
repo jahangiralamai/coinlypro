@@ -890,11 +890,21 @@ if(typeof Telegram !== 'undefined' && Telegram.WebApp){
 }
 
 /* ============ AUTHENTICATION & INIT ============ */
+function getDemoInitData(){
+  return new URLSearchParams({
+    user: JSON.stringify({
+      id: '999999999',
+      first_name: 'Demo',
+      username: 'demo_user'
+    })
+  }).toString();
+}
+
 async function initializeApp(){
   addDebugLog('/api/auth', 'POST', 'SENDING', 'NONE', '');
   try {
     // Try to authenticate with backend
-    const initData = (tg && tg.initData) ? tg.initData : 'demo_mode=true';
+    const initData = tg?.initData?.trim() || getDemoInitData();
     
     const response = await fetch(`${API_BASE_URL}/api/auth`, {
       method: 'POST',
