@@ -56,16 +56,26 @@ const allowedOrigins = new Set([
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 ]);
 
-// CORS for the production frontend and local development.
-app.use(cors({
-  origin(origin, callback) {
-    return callback(null, !origin || allowedOrigins.has(origin));
-  },
-  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400,
-  optionsSuccessStatus: 204
-}));
+// CORS middleware - explicit configuration
+app.use((req, res, next) => {
+  const origin = req.get('origin');
+  
+  // Check if origin is allowed
+  if (!origin || allowedOrigins.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+    res.header('Access-Control-Max-Age', '86400');
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
 
 // Body parser - AFTER CORS
 app.use(bodyParser.json());
