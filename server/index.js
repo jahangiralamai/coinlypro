@@ -46,8 +46,8 @@ function saveDB() {
 loadDB();
 
 const allowedOrigins = new Set([
-  'https://coinlypro.netlify.app',
   'https://coinly-pro.vercel.app',
+  'https://coinlypro.netlify.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   'https://web.telegram.org',
@@ -57,23 +57,22 @@ const allowedOrigins = new Set([
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 ]);
 
-// CORS middleware - explicit configuration
+// CORS middleware - explicit configuration with wildcard for Telegram
 app.use((req, res, next) => {
   const origin = req.get('origin');
   
-  // Log origin for debugging
-  console.log(`[CORS] Request origin: ${origin}`);
-  
-  // Check if origin is allowed
-  if (origin && allowedOrigins.has(origin)) {
-    console.log(`[CORS] ✓ Origin allowed: ${origin}`);
-    res.header('Access-Control-Allow-Origin', origin);
+  // Always set CORS headers for Telegram and our domains
+  // Telegram WebView may send various origins, so we're permissive
+  if (!origin || 
+      allowedOrigins.has(origin) || 
+      origin.includes('telegram') ||
+      origin.includes('vercel.app') ||
+      origin.includes('netlify.app')) {
+    res.header('Access-Control-Allow-Origin', origin || '*');
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     res.header('Access-Control-Max-Age', '86400');
-  } else if (origin) {
-    console.log(`[CORS] ✗ Origin NOT allowed: ${origin}`);
   }
   
   // Handle preflight requests
