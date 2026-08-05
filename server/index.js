@@ -46,7 +46,7 @@ function saveDB() {
 loadDB();
 
 const allowedOrigins = new Set([
-  'https://coinlypro.netlify.app',
+  'https://coinly-pro.vercel.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean)
@@ -348,5 +348,5 @@ app.listen(PORT, () => {
   console.log(`\n🚀 Backend server running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`💾 Database: In-memory (persisted to db.json)`);
-  console.log(`🔐 CORS enabled for: https://coinlypro.netlify.app\n`);
+  console.log(`🔐 CORS enabled for: https://coinly-pro.vercel.app\n`);
 });
