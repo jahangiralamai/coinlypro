@@ -46,9 +46,13 @@ function saveDB() {
 loadDB();
 
 const allowedOrigins = new Set([
-  'https://coinly-pro.vercel.app',
+  'https://coinlypro.netlify.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
+  'https://web.telegram.org',
+  'https://webk.telegram.org',
+  'https://webd.telegram.org',
+  'https://webz.telegram.org',
   ...(process.env.CORS_ORIGINS || '').split(',').map((origin) => origin.trim()).filter(Boolean)
 ]);
 
