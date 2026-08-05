@@ -46,6 +46,7 @@ function saveDB() {
 loadDB();
 
 const allowedOrigins = new Set([
+  'https://coinlypro.netlify.app',
   'https://coinly-pro.vercel.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
