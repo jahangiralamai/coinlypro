@@ -825,6 +825,218 @@ console.log(`🌐 Current hostname: ${window.location.hostname}`);
 
 let currentUser = null;
 
+/* ============ EARLY ONCLICK HANDLER FUNCTIONS (MUST BE BEFORE DOM) ============ */
+// These functions are referenced by inline onclick handlers in the HTML above
+// They must be defined before the HTML renders
+
+function switchPage(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===page));
+  document.getElementById('app').scrollIntoView({behavior:'instant'});
+  window.scrollTo(0,0);
+}
+
+function openModal(id){
+  document.getElementById(id).classList.add('show');
+}
+
+function closeModal(id){
+  document.getElementById(id).classList.remove('show');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window.toastTimer);
+  window.toastTimer = setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+function selectMethod(event, el){
+  event.stopPropagation();
+  document.querySelectorAll('.method-pick').forEach(m=>m.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function openWithdraw(){
+  openModal('withdrawModal');
+}
+
+function confirmWithdraw(event){
+  event.preventDefault();
+  const amt = parseInt(document.getElementById('withdrawAmount').value);
+  const method = document.querySelector('.method-pick.selected .m-name')?.textContent || 'bKash';
+  
+  if(!amt || amt < 100){
+    showToast('Minimum withdrawal is 100 coins');
+    return;
+  }
+  if(amt > balance){
+    showToast('Insufficient balance');
+    return;
+  }
+  
+  closeModal('withdrawModal');
+  showToast(`✅ Withdrawal of ${amt} coins initiated to ${method}`);
+  balance -= amt;
+  bumpBalance(-amt);
+}
+
+function filterHistory(el, type){
+  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderHistory(type);
+}
+
+function toggleSetting(event, i){
+  event.stopPropagation();
+  settings[i].on = !settings[i].on;
+  document.getElementById(`toggle-${i}`).classList.toggle('on', settings[i].on);
+}
+
+function copyReferral(event){
+  event.stopPropagation();
+  if(!currentUser){
+    showToast('Loading user info...');
+    return;
+  }
+  const link = `https://t.me/AdsRewardsBot?start=${currentUser.referral_code}`;
+  navigator.clipboard.writeText(link).then(()=>{
+    showToast('Referral link copied! 📋');
+  }).catch(()=>{
+    showToast('Copy failed, try again');
+  });
+}
+
+function claimDailyReward(event){
+  const btn = document.getElementById('claimBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="shimmer" style="display:inline-block;width:100%;height:18px;border-radius:8px;"></span>`;
+  setTimeout(()=>{
+    triggerBonus(40);
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7S9 2 6 2 3 5 6 7h6z"/><path d="M12 7s3-5 6-5 3 3 0 5h-6z"/></svg> Claim Daily Reward`;
+  }, 900);
+}
+
+function claimMission(event, i){
+  event.stopPropagation();
+  const m = missions[i];
+  triggerBonus(m.reward);
+  m.progress = 100;
+  renderMissions();
+}
+
+function watchAd(event, containerId, index, reward){
+  event.stopPropagation();
+  if(window.watchingBusy) return;
+  window.watchingBusy = true;
+  const overlay = document.getElementById('watchingOverlay');
+  const timerEl = document.getElementById('watchTimer');
+  let t = 5;
+  timerEl.textContent = t;
+  overlay.classList.add('show');
+  
+  const interval = setInterval(async ()=>{
+    t--;
+    timerEl.textContent = t;
+    if(t<=0){
+      clearInterval(interval);
+      overlay.classList.remove('show');
+      window.watchingBusy = false;
+      
+      // Call backend API to record ad watch
+      if(currentUser){
+        addDebugLog('/api/watch-ad', 'POST', 'SENDING', 'NONE', '');
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/watch-ad`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              telegram_id: currentUser.telegram_id,
+              reward: reward,
+              ad_id: `ad-${index}`
+            })
+          });
+          
+          if(response.ok){
+            const data = await response.json();
+            addDebugLog('/api/watch-ad', 'POST', response.status, 'NONE', `Reward: ${reward} coins`);
+            markWatched(containerId, index);
+            balance = data.new_balance;
+            triggerBonus(reward);
+            loadBalance();
+          } else {
+            const err = await response.json();
+            addDebugLog('/api/watch-ad', 'POST', response.status, 'HTTP_ERROR', `Status ${response.status}: ${err.error || 'Failed'}`);
+            showToast(err.error || 'Failed to process ad reward');
+          }
+        } catch(err) {
+          const errorMsg = err.message || err.toString();
+          const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
+          addDebugLog('/api/watch-ad', 'POST', 'FAILED', errorType, errorMsg);
+          console.error('Watch ad error:', err);
+          showToast('Connection error, please try again');
+        }
+      } else {
+        // Demo mode
+        markWatched(containerId, index);
+        triggerBonus(reward);
+      }
+    }
+  }, 1000);
+}
+
+function markWatched(containerId, index){
+  ['adList','adListFull'].forEach(cid=>{
+    const btn = document.getElementById(`watch-${cid}-${index}`);
+    if(btn){ btn.textContent='Watched'; btn.classList.add('watched'); btn.disabled=true; }
+  });
+}
+
+function triggerBonus(amount){
+  document.getElementById('bonusAmount').textContent = `+${amount} Coins`;
+  openModal('bonusModal');
+  launchConfetti();
+  bumpBalance(amount);
+}
+
+function bumpBalance(amount){
+  balance += amount;
+  today += amount;
+  animateCounter('balanceNum', balance);
+  animateCounter('todayEarn', today, '+');
+}
+
+function animateCounter(id, target, prefix=''){
+  const el = document.getElementById(id);
+  const start = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  const duration = 600;
+  const startTime = performance.now();
+  function step(now){
+    const p = Math.min((now-startTime)/duration, 1);
+    const eased = 1 - Math.pow(1-p, 3);
+    const val = Math.round(start + (target-start)*eased);
+    el.textContent = prefix + val.toLocaleString();
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function launchConfetti(){
+  const confetti = document.getElementById('confetti');
+  if(!confetti) return;
+  confetti.innerHTML = '';
+  for(let i = 0; i < 50; i++){
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = Math.random() * 100 + '%';
+    el.style.delay = Math.random() * 0.5 + 's';
+    confetti.appendChild(el);
+  }
+}
+
 /* ============ DEBUG LOGGING ============ */
 let debugLogs = [];
 const MAX_DEBUG_LOGS = 20;
@@ -1196,158 +1408,7 @@ document.getElementById('withdrawMethods').innerHTML = methodColors.map((m,i)=>`
   </div>
 `).join('');
 
-function selectMethod(e,el){
-  document.querySelectorAll('.method-pick').forEach(m=>m.classList.remove('selected'));
-  el.classList.add('selected');
-}
-
-/* ============ NAVIGATION ============ */
-function switchPage(page){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+page).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.page===page));
-  document.getElementById('app').scrollIntoView({behavior:'instant'});
-  window.scrollTo(0,0);
-}
-
 /* ============ RIPPLE ============ */
-document.addEventListener('click', function(e){
-  const target = e.target.closest('.claim-btn, .watch-btn, .ref-btn, .icon-btn, .nav-item, .redeem-card, .m-btn');
-  if(!target) return;
-  const rect = target.getBoundingClientRect();
-  const ripple = document.createElement('span');
-  const size = Math.max(rect.width, rect.height);
-  ripple.className='ripple';
-  ripple.style.width = ripple.style.height = size+'px';
-  ripple.style.left = (e.clientX-rect.left-size/2)+'px';
-  ripple.style.top = (e.clientY-rect.top-size/2)+'px';
-  target.style.position = target.style.position || 'relative';
-  target.style.overflow='hidden';
-  target.appendChild(ripple);
-  setTimeout(()=>ripple.remove(),600);
-});
-
-/* ============ DAILY RING ANIM ============ */
-window.addEventListener('load', ()=>{
-  const ring = document.getElementById('dailyRing');
-  const circumference = 150.8;
-  const pct = 0.65;
-  requestAnimationFrame(()=>{
-    ring.style.strokeDashoffset = circumference - (circumference*pct);
-  });
-  
-  // Initialize app on page load
-  initializeApp();
-});
-
-/* ============ WATCH AD FLOW ============ */
-let watchingBusy = false;
-async function watchAd(e, containerId, index, reward){
-  e.stopPropagation();
-  if(watchingBusy) return;
-  watchingBusy = true;
-  const overlay = document.getElementById('watchingOverlay');
-  const timerEl = document.getElementById('watchTimer');
-  let t = 5;
-  timerEl.textContent = t;
-  overlay.classList.add('show');
-  
-  const interval = setInterval(async ()=>{
-    t--;
-    timerEl.textContent = t;
-    if(t<=0){
-      clearInterval(interval);
-      overlay.classList.remove('show');
-      watchingBusy = false;
-      
-      // Call backend API to record ad watch
-      if(currentUser){
-        addDebugLog('/api/watch-ad', 'POST', 'SENDING', 'NONE', '');
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/watch-ad`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-              telegram_id: currentUser.telegram_id,
-              reward: reward,
-              ad_id: `ad-${index}`
-            })
-          });
-          
-          if(response.ok){
-            const data = await response.json();
-            addDebugLog('/api/watch-ad', 'POST', response.status, 'NONE', `Reward: ${reward} coins`);
-            markWatched(containerId, index);
-            balance = data.new_balance;
-            triggerBonus(reward);
-            loadBalance();
-          } else {
-            const err = await response.json();
-            addDebugLog('/api/watch-ad', 'POST', response.status, 'HTTP_ERROR', `Status ${response.status}: ${err.error || 'Failed'}`);
-            showToast(err.error || 'Failed to process ad reward');
-          }
-        } catch(err) {
-          const errorMsg = err.message || err.toString();
-          const errorType = err instanceof TypeError ? 'NETWORK_ERROR' : 'UNKNOWN_ERROR';
-          addDebugLog('/api/watch-ad', 'POST', 'FAILED', errorType, errorMsg);
-          console.error('Watch ad error:', err);
-          showToast('Connection error, please try again');
-        }
-      } else {
-        // Demo mode
-        markWatched(containerId, index);
-        triggerBonus(reward);
-      }
-    }
-  }, 1000);
-}
-
-function markWatched(containerId, index){
-  ['adList','adListFull'].forEach(cid=>{
-    const btn = document.getElementById(`watch-${cid}-${index}`);
-    if(btn){ btn.textContent='Watched'; btn.classList.add('watched'); btn.disabled=true; }
-  });
-}
-
-function triggerBonus(amount){
-  document.getElementById('bonusAmount').textContent = `+${amount} Coins`;
-  openModal('bonusModal');
-  launchConfetti();
-  bumpBalance(amount);
-}
-
-/* ============ CLAIM DAILY ============ */
-function claimDailyReward(e){
-  const btn = document.getElementById('claimBtn');
-  btn.disabled = true;
-  btn.innerHTML = `<span class="shimmer" style="display:inline-block;width:100%;height:18px;border-radius:8px;"></span>`;
-  setTimeout(()=>{
-    triggerBonus(40);
-    btn.disabled = false;
-    btn.innerHTML = `${document.querySelector('.claim-btn svg')?.outerHTML || ''} Claim Daily Reward`;
-    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7S9 2 6 2 3 5 6 7h6z"/><path d="M12 7s3-5 6-5 3 3 0 5h-6z"/></svg> Claim Daily Reward`;
-  },900);
-}
-
-function claimMission(e,i){
-  e.stopPropagation();
-  const m = missions[i];
-  triggerBonus(m.reward);
-  m.progress = 100;
-  renderMissions();
-}
-
-/* ============ BALANCE ANIM ============ */
-let balance = 2480, today = 180;
-function bumpBalance(amount){
-  balance += amount; today += amount;
-  animateCounter('balanceNum', balance);
-  animateCounter('todayEarn', today, '+');
-}
-function animateCounter(id, target, prefix=''){
-  const el = document.getElementById(id);
-  const start = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
-  const duration = 600;
   const startTime = performance.now();
   function step(now){
     const p = Math.min((now-startTime)/duration, 1);
