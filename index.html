@@ -4,7 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Ads Rewards</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js" async defer></script>
+<script>
+  // Ensure Telegram WebApp is available - fallback if not loaded
+  window.ensureTelegramReady = function(callback) {
+    if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+      callback();
+    } else {
+      // Wait for Telegram to load, with timeout
+      let attempts = 0;
+      const checkTelegram = setInterval(() => {
+        attempts++;
+        if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+          clearInterval(checkTelegram);
+          callback();
+        } else if (attempts > 50) { // 5 seconds timeout
+          clearInterval(checkTelegram);
+          console.warn('Telegram SDK not available, using demo mode');
+          callback();
+        }
+      }, 100);
+    }
+  };
+</script>
 <style>
   :root{
     --primary:#229ED9;
@@ -1078,28 +1100,49 @@ function updateDebugBox() {
 
 /* ============ TELEGRAM WEBAPP SDK ============ */
 let tg = null;
-if(typeof Telegram !== 'undefined' && Telegram.WebApp){
-  tg = Telegram.WebApp;
-  tg.ready();
-  tg.expand();
-  
-  // Get real Telegram user data
-  const user = tg.initDataUnsafe?.user;
-  if(user){
-    // Update avatar with user initials
-    const initials = (user.first_name?.[0] || 'U') + (user.last_name?.[0] || 'S');
-    const avatarEl = document.querySelector('.avatar');
-    if(avatarEl) avatarEl.textContent = initials.toUpperCase();
-    
-    // Update user name
-    const nameEl = document.querySelector('.user-name');
-    if(nameEl && user.first_name) nameEl.textContent = user.first_name;
-    
-    // Update user handle
-    const subEl = document.querySelector('.user-sub');
-    if(subEl && user.username) subEl.textContent = '@' + user.username;
+
+function initTelegramSDK() {
+  if (typeof Telegram !== 'undefined' && Telegram.WebApp) {
+    try {
+      tg = Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+      tg.enableClosingConfirmation();
+      
+      console.log('✅ Telegram WebApp SDK initialized successfully');
+      console.log('User data:', tg.initDataUnsafe?.user);
+      
+      // Get real Telegram user data
+      const user = tg.initDataUnsafe?.user;
+      if (user) {
+        // Update avatar with user initials
+        const initials = (user.first_name?.[0] || 'U') + (user.last_name?.[0] || 'S');
+        const avatarEl = document.querySelector('.avatar');
+        if (avatarEl) avatarEl.textContent = initials.toUpperCase();
+        
+        // Update user name
+        const nameEl = document.querySelector('.user-name');
+        if (nameEl && user.first_name) nameEl.textContent = user.first_name;
+        
+        // Update user handle
+        const subEl = document.querySelector('.user-sub');
+        if (subEl && user.username) subEl.textContent = '@' + user.username;
+        
+        console.log(`Telegram user: ${user.first_name} (@${user.username})`);
+      } else {
+        console.warn('No Telegram user data available (normal in testing)');
+      }
+    } catch (err) {
+      console.error('Error initializing Telegram SDK:', err);
+    }
+  } else {
+    console.warn('⚠️ Telegram WebApp SDK not available - running in demo mode');
+    console.log('This is normal when testing outside Telegram Mini App');
   }
 }
+
+// Call on script load
+initTelegramSDK();
 
 /* ============ AUTHENTICATION & INIT ============ */
 function getDemoInitData(){
@@ -1115,8 +1158,18 @@ function getDemoInitData(){
 async function initializeApp(){
   addDebugLog('/api/auth', 'POST', 'SENDING', 'NONE', '');
   try {
-    // Try to authenticate with backend
-    const initData = tg?.initData?.trim() || getDemoInitData();
+    // Prioritize real Telegram data, fallback to demo
+    let initData = null;
+    
+    if (tg && tg.initData && tg.initData.trim()) {
+      initData = tg.initData.trim();
+      console.log('✅ Using Telegram initData for authentication');
+      addDebugLog('/api/auth', 'POST', 'INFO', 'NONE', 'Using Telegram data');
+    } else {
+      initData = getDemoInitData();
+      console.log('⚠️ Using demo data (Telegram SDK not available)');
+      addDebugLog('/api/auth', 'POST', 'INFO', 'NONE', 'Using demo data');
+    }
     
     const response = await fetch(`${API_BASE_URL}/api/auth`, {
       method: 'POST',
@@ -1128,6 +1181,7 @@ async function initializeApp(){
       const data = await response.json();
       currentUser = data.user;
       addDebugLog('/api/auth', 'POST', response.status, 'NONE', 'User authenticated');
+      console.log('✅ Authentication successful:', currentUser);
       loadBalance();
       // Connection successful - don't show error message
     } else {
