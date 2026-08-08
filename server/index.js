@@ -47,7 +47,6 @@ loadDB();
 
 const allowedOrigins = new Set([
   'https://coinly-pro.vercel.app',
-  'https://coinlypro.netlify.app',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
   'https://web.telegram.org',
@@ -60,11 +59,11 @@ const allowedOrigins = new Set([
 // CORS middleware - explicit configuration with wildcard for Telegram
 app.use((req, res, next) => {
   const origin = req.get('origin');
-  
+
   // Always set CORS headers for Telegram and our domains
   // Telegram WebView may send various origins, so we're permissive
-  if (!origin || 
-      allowedOrigins.has(origin) || 
+  if (!origin ||
+      allowedOrigins.has(origin) ||
       origin.includes('telegram') ||
       origin.includes('vercel.app') ||
       origin.includes('netlify.app')) {
@@ -74,12 +73,12 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
     res.header('Access-Control-Max-Age', '86400');
   }
-  
+
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
-  
+
   next();
 });
 
@@ -152,15 +151,15 @@ app.post('/api/auth', (req, res) => {
   try {
     const { initData } = req.body;
     const user = validateTelegramData(initData);
-    
+
     if (!user || !user.id) {
       console.log(`[${new Date().toISOString()}] AUTH FAILED: Invalid Telegram data`);
       return res.status(400).json({ error: 'Invalid Telegram data' });
     }
-    
+
     const telegramId = user.id.toString();
     const userData = getOrCreateUser(telegramId, user);
-    
+
     res.json({
       success: true,
       user: {
@@ -184,7 +183,7 @@ app.get('/api/balance/:telegram_id', (req, res) => {
   try {
     const telegramId = req.params.telegram_id;
     const user = getOrCreateUser(telegramId);
-    
+
     res.json({
       balance: user.balance,
       today_earned: user.today_earned,
@@ -203,16 +202,16 @@ app.post('/api/watch-ad', (req, res) => {
   console.log(`[${new Date().toISOString()}] POST /api/watch-ad from ${req.ip} | User: ${req.body.telegram_id} | Reward: ${req.body.reward}`);
   try {
     const { telegram_id, reward, ad_id } = req.body;
-    
+
     if (!telegram_id || !reward || !ad_id) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    
+
     // Check rate limit (max 5 ads per hour)
     if (!checkRateLimit(`ad_${telegram_id}`, 5, 3600000)) {
       return res.status(429).json({ error: 'Too many ads watched. Try again later.' });
     }
-    
+
     // Check ad cooldown (can't watch same ad within 5 minutes)
     const cooldownKey = `ad_${telegram_id}_${ad_id}`;
     if (db.adCooldowns[cooldownKey]) {
@@ -221,12 +220,12 @@ app.post('/api/watch-ad', (req, res) => {
         return res.status(429).json({ error: 'This ad was recently watched. Try another ad.' });
       }
     }
-    
+
     const user = getOrCreateUser(telegram_id);
     user.balance += reward;
     user.today_earned += reward;
     user.lifetime_earned += reward;
-    
+
     // Record transaction
     db.transactions.push({
       telegram_id,
@@ -237,12 +236,12 @@ app.post('/api/watch-ad', (req, res) => {
       ad_id,
       created_at: new Date().toISOString()
     });
-    
+
     // Record ad cooldown
     db.adCooldowns[cooldownKey] = Date.now();
-    
+
     saveDB();
-    
+
     res.json({
       success: true,
       new_balance: user.balance,
@@ -260,13 +259,13 @@ app.get('/api/history/:telegram_id', (req, res) => {
   console.log(`[${new Date().toISOString()}] GET /api/history/${req.params.telegram_id} from ${req.ip}`);
   try {
     const telegramId = req.params.telegram_id;
-    
+
     // Get all transactions for this user, sorted by date (newest first)
     const userTransactions = db.transactions
       .filter(t => t.telegram_id === telegramId)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 50); // Last 50 transactions
-    
+
     res.json({
       transactions: userTransactions
     });
@@ -281,33 +280,33 @@ app.post('/api/withdraw', (req, res) => {
   console.log(`[${new Date().toISOString()}] POST /api/withdraw from ${req.ip} | User: ${req.body.telegram_id} | Method: ${req.body.method} | Amount: ${req.body.amount}`);
   try {
     const { telegram_id, method, amount, account_number } = req.body;
-    
+
     if (!telegram_id || !method || !amount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    
+
     // Validate minimum withdrawal
     if (amount < 100) {
       return res.status(400).json({ error: 'Minimum withdrawal is 100 coins' });
     }
-    
+
     const user = getOrCreateUser(telegram_id);
-    
+
     // Check balance
     if (user.balance < amount) {
       return res.status(400).json({ error: 'Insufficient balance' });
     }
-    
+
     // Check rate limit (max 3 withdrawals per day)
     const today = new Date().toDateString();
     const withdrawalTodayKey = `withdraw_${telegram_id}_${today}`;
     if (!checkRateLimit(withdrawalTodayKey, 3, 24 * 3600000)) {
       return res.status(429).json({ error: 'Maximum 3 withdrawals per day. Try tomorrow.' });
     }
-    
+
     // Deduct balance immediately (prevent double-spend)
     user.balance -= amount;
-    
+
     // Create withdrawal record
     const withdrawalId = `w_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     db.withdrawals.push({
@@ -319,7 +318,7 @@ app.post('/api/withdraw', (req, res) => {
       status: 'pending',
       created_at: new Date().toISOString()
     });
-    
+
     // Record transaction
     db.transactions.push({
       telegram_id,
@@ -330,9 +329,9 @@ app.post('/api/withdraw', (req, res) => {
       withdrawal_id: withdrawalId,
       created_at: new Date().toISOString()
     });
-    
+
     saveDB();
-    
+
     res.json({
       success: true,
       withdrawal_id: withdrawalId,
@@ -353,7 +352,7 @@ app.get('/api/user/:telegram_id', (req, res) => {
   try {
     const telegramId = req.params.telegram_id;
     const user = getOrCreateUser(telegramId);
-    
+
     res.json({
       user
     });
